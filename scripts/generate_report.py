@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from urllib.parse import urlparse
@@ -816,6 +817,11 @@ def main():
         default=5,
         help="Number of parallel workers (default: 5)"
     )
+    parser.add_argument(
+        "--no-open",
+        action="store_true",
+        help="Don't open the HTML report in browser after generation"
+    )
 
     args = parser.parse_args()
 
@@ -900,6 +906,12 @@ def main():
     print("  30-49:  Poor - Major overhaul required")
     print("  0-29:   Critical - Immediate action required")
     print()
+
+    # Auto-open HTML report in default browser
+    if not args.no_open:
+        report_url = "file://" + os.path.abspath(html_output).replace("\\", "/")
+        print(f"Opening report in browser...")
+        webbrowser.open(report_url)
 
 
 if __name__ == "__main__":

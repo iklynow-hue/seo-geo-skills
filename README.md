@@ -6,13 +6,19 @@ Produces dual scores: **SEO Score** (traditional search) and **GEO Score** (AI s
 ## Quick Start
 
 ```bash
-# Install
-cd ~/projects/seo-geo-master-check
+# Clone
+git clone https://github.com/iklynow-hue/seo-geo-skills.git
+cd seo-geo-skills
+
+# Install (macOS / Linux)
 bash install.sh
+
+# Install (Windows — PowerShell)
+powershell -ExecutionPolicy Bypass -File install.ps1
 
 # Run audit
 claude
-> sgeo audit https://photorefix.com
+> sgeo audit https://example.com
 ```
 
 ## Features
@@ -20,7 +26,7 @@ claude
 - **Dual Scoring**: Independent SEO and GEO scores from single audit
 - **MECE Framework**: No overlap, complete coverage across 10 categories
 - **Script-Backed**: 19+ Python scripts for deterministic verification
-- **Portable**: Works on macOS and Linux, integrates with Claude CLI and Codex CLI
+- **Cross-Platform**: Works on macOS, Linux, and Windows
 - **FAQPage Policy**: Keep FAQPage schema for AI search benefits (despite Google restriction)
 
 ## Commands
@@ -61,10 +67,16 @@ claude
 - Python 3.8+
 - `requests`, `beautifulsoup4`, `lxml`
 
-### Install
+### macOS / Linux
 ```bash
-cd ~/projects/seo-geo-master-check
+cd seo-geo-skills
 bash install.sh
+```
+
+### Windows (PowerShell)
+```powershell
+cd seo-geo-skills
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 This will:
@@ -73,18 +85,27 @@ This will:
 3. Verify installation
 
 ### Uninstall
+
+macOS / Linux:
 ```bash
 bash uninstall.sh
+```
+
+Windows (PowerShell):
+```powershell
+powershell -ExecutionPolicy Bypass -File uninstall.ps1
 ```
 
 ## Project Structure
 
 ```
-seo-geo-master-check/
+seo-geo-skills/
 ├── SKILL.md                    # Main skill definition
 ├── MECE-FRAMEWORK.md           # Framework documentation
-├── install.sh                  # Installation script
-├── uninstall.sh                # Uninstallation script
+├── install.sh                  # Install script (macOS/Linux)
+├── install.ps1                 # Install script (Windows)
+├── uninstall.sh                # Uninstall script (macOS/Linux)
+├── uninstall.ps1               # Uninstall script (Windows)
 ├── scripts/                    # 19+ audit scripts
 │   ├── fetch_page.py
 │   ├── parse_html.py
@@ -146,7 +167,7 @@ Start with LLM reasoning, verify with scripts. Never block on script failure.
 ### Full Audit
 ```bash
 claude
-> sgeo audit https://photorefix.com
+> sgeo audit https://example.com
 ```
 
 Output:
@@ -185,20 +206,24 @@ Same symlink works for Codex CLI
 
 ### Standalone
 ```bash
-cd ~/projects/seo-geo-master-check
+cd seo-geo-skills
 python3 scripts/generate_report.py https://example.com
+
+# Skip auto-opening the report in browser
+python3 scripts/generate_report.py https://example.com --no-open
 ```
 
 ## Dependencies
 
 ### Required
 ```bash
-pip install requests beautifulsoup4 lxml
+python3 -m pip install requests beautifulsoup4 lxml
+# On Windows, use: python -m pip install requests beautifulsoup4 lxml
 ```
 
 ### Optional
 ```bash
-pip install playwright
+python3 -m pip install playwright
 playwright install chromium  # For screenshots
 ```
 
