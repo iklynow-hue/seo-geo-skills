@@ -49,31 +49,33 @@ except ImportError:
 
 
 # ============================================================
-# COLOR PALETTE
+# COLOR PALETTE - Modern, Professional Design
 # ============================================================
-PRIMARY = HexColor("#1a1a2e")       # Dark navy
-SECONDARY = HexColor("#16213e")     # Slightly lighter navy
-ACCENT = HexColor("#0f3460")        # Blue accent
-HIGHLIGHT = HexColor("#e94560")     # Red/coral highlight
-SUCCESS = HexColor("#00b894")       # Green
-WARNING = HexColor("#fdcb6e")       # Yellow/amber
-DANGER = HexColor("#d63031")        # Red
-INFO = HexColor("#0984e3")          # Blue
-LIGHT_BG = HexColor("#f8f9fa")      # Light background
-MEDIUM_BG = HexColor("#e9ecef")     # Medium background
-TEXT_PRIMARY = HexColor("#2d3436")   # Dark text
-TEXT_SECONDARY = HexColor("#636e72") # Grey text
+PRIMARY = HexColor("#0A2540")       # Deep navy blue
+SECONDARY = HexColor("#1A365D")     # Rich blue
+ACCENT = HexColor("#3B82F6")        # Bright blue accent
+HIGHLIGHT = HexColor("#8B5CF6")     # Purple highlight
+SUCCESS = HexColor("#10B981")       # Modern green
+WARNING = HexColor("#F59E0B")       # Amber
+DANGER = HexColor("#EF4444")        # Modern red
+INFO = HexColor("#3B82F6")          # Blue
+LIGHT_BG = HexColor("#F9FAFB")      # Very light grey
+MEDIUM_BG = HexColor("#F3F4F6")     # Light grey
+DARK_BG = HexColor("#1F2937")       # Dark grey
+TEXT_PRIMARY = HexColor("#111827")   # Almost black
+TEXT_SECONDARY = HexColor("#6B7280") # Medium grey
+TEXT_LIGHT = HexColor("#9CA3AF")     # Light grey
 WHITE = white
 BLACK = black
 
 
 def get_score_color(score):
     """Return color based on score value."""
-    if score >= 80:
+    if score >= 85:
         return SUCCESS
-    elif score >= 60:
+    elif score >= 70:
         return INFO
-    elif score >= 40:
+    elif score >= 55:
         return WARNING
     else:
         return DANGER
@@ -94,34 +96,38 @@ def get_score_label(score):
 
 
 def create_score_gauge(score, width=120, height=120):
-    """Create a visual score gauge."""
+    """Create a visual score gauge with modern design."""
     d = Drawing(width, height)
 
+    # Outer shadow circle
+    d.add(Circle(width/2, height/2, 52, fillColor=MEDIUM_BG, strokeColor=None))
+
     # Background circle
-    d.add(Circle(width/2, height/2, 50, fillColor=LIGHT_BG, strokeColor=lightgrey, strokeWidth=2))
+    d.add(Circle(width/2, height/2, 50, fillColor=WHITE, strokeColor=LIGHT_BG, strokeWidth=3))
 
     # Score arc (simplified as colored circle)
     color = get_score_color(score)
-    d.add(Circle(width/2, height/2, 45, fillColor=color, strokeColor=None))
+    d.add(Circle(width/2, height/2, 46, fillColor=color, strokeColor=None))
 
-    # Inner white circle
-    d.add(Circle(width/2, height/2, 35, fillColor=WHITE, strokeColor=None))
+    # Inner white circle with subtle shadow
+    d.add(Circle(width/2, height/2, 38, fillColor=LIGHT_BG, strokeColor=None))
+    d.add(Circle(width/2, height/2, 37, fillColor=WHITE, strokeColor=None))
 
-    # Score text
-    d.add(String(width/2, height/2 + 5, str(score),
-                 fontSize=24, fontName='Helvetica-Bold',
+    # Score text - larger and bolder
+    d.add(String(width/2, height/2 + 8, str(score),
+                 fontSize=32, fontName='Helvetica-Bold',
                  fillColor=TEXT_PRIMARY, textAnchor='middle'))
 
-    # Label
-    d.add(String(width/2, height/2 - 12, "/100",
-                 fontSize=10, fontName='Helvetica',
-                 fillColor=TEXT_SECONDARY, textAnchor='middle'))
+    # Label - smaller and lighter
+    d.add(String(width/2, height/2 - 15, "/100",
+                 fontSize=9, fontName='Helvetica',
+                 fillColor=TEXT_LIGHT, textAnchor='middle'))
 
     return d
 
 
 def create_bar_chart(data, labels, width=400, height=200):
-    """Create a horizontal bar chart for scores."""
+    """Create a modern vertical bar chart for scores."""
     d = Drawing(width, height)
 
     chart = VerticalBarChart()
@@ -132,149 +138,169 @@ def create_bar_chart(data, labels, width=400, height=200):
     chart.data = [data]
     chart.categoryAxis.categoryNames = labels
     chart.categoryAxis.labels.angle = 0
-    chart.categoryAxis.labels.fontSize = 8
+    chart.categoryAxis.labels.fontSize = 9
     chart.categoryAxis.labels.fontName = 'Helvetica'
+    chart.categoryAxis.labels.fillColor = TEXT_SECONDARY
     chart.valueAxis.valueMin = 0
     chart.valueAxis.valueMax = 100
     chart.valueAxis.valueStep = 20
-    chart.valueAxis.labels.fontSize = 8
+    chart.valueAxis.labels.fontSize = 9
+    chart.valueAxis.labels.fillColor = TEXT_SECONDARY
+    chart.valueAxis.strokeColor = LIGHT_BG
+    chart.categoryAxis.strokeColor = LIGHT_BG
 
-    # Color each bar based on score
+    # Color each bar based on score with rounded appearance
+    chart.bars.strokeColor = None
+    chart.bars.strokeWidth = 0
+
+    # Add gradient-like effect by using multiple colors
     for i, score in enumerate(data):
-        chart.bars[0].fillColor = get_score_color(score)
-
-    chart.bars[0].strokeColor = None
-    chart.bars[0].strokeWidth = 0
+        color = get_score_color(score)
+        chart.bars[0].fillColor = color
 
     d.add(chart)
     return d
 
 
 def create_platform_chart(platforms, width=450, height=180):
-    """Create a chart showing platform readiness scores."""
+    """Create a modern chart showing platform readiness scores."""
     d = Drawing(width, height)
 
-    bar_height = 22
+    bar_height = 26
     bar_max_width = 280
     start_y = height - 30
     label_x = 10
 
     for i, (name, score) in enumerate(platforms.items()):
-        y = start_y - (i * (bar_height + 10))
+        y = start_y - (i * (bar_height + 12))
 
-        # Platform name
-        d.add(String(label_x, y + 5, name,
-                     fontSize=9, fontName='Helvetica',
+        # Platform name with better typography
+        d.add(String(label_x, y + 7, name,
+                     fontSize=10, fontName='Helvetica',
                      fillColor=TEXT_PRIMARY, textAnchor='start'))
 
-        # Background bar
-        bar_x = 130
+        # Background bar with rounded appearance
+        bar_x = 140
         d.add(Rect(bar_x, y, bar_max_width, bar_height,
-                    fillColor=LIGHT_BG, strokeColor=None))
+                    fillColor=LIGHT_BG, strokeColor=MEDIUM_BG, strokeWidth=1))
 
-        # Score bar
+        # Score bar with gradient-like effect
         bar_width = (score / 100) * bar_max_width
         color = get_score_color(score)
+
+        # Add subtle shadow effect
+        d.add(Rect(bar_x + 1, y - 1, bar_width, bar_height,
+                    fillColor=MEDIUM_BG, strokeColor=None))
         d.add(Rect(bar_x, y, bar_width, bar_height,
                     fillColor=color, strokeColor=None))
 
-        # Score text
-        d.add(String(bar_x + bar_max_width + 10, y + 6, f"{score}/100",
-                     fontSize=9, fontName='Helvetica-Bold',
-                     fillColor=TEXT_PRIMARY, textAnchor='start'))
+        # Score text with better positioning
+        d.add(String(bar_x + bar_max_width + 15, y + 8, f"{score}",
+                     fontSize=11, fontName='Helvetica-Bold',
+                     fillColor=color, textAnchor='start'))
+        d.add(String(bar_x + bar_max_width + 35, y + 8, "/100",
+                     fontSize=9, fontName='Helvetica',
+                     fillColor=TEXT_LIGHT, textAnchor='start'))
 
     return d
 
 
 def build_styles():
-    """Create custom paragraph styles."""
+    """Create custom paragraph styles with modern typography."""
     styles = getSampleStyleSheet()
 
     styles.add(ParagraphStyle(
         name='ReportTitle',
         fontName='Helvetica-Bold',
-        fontSize=28,
+        fontSize=32,
         textColor=PRIMARY,
-        spaceAfter=6,
+        spaceAfter=8,
         alignment=TA_LEFT,
+        leading=38,
     ))
 
     styles.add(ParagraphStyle(
         name='ReportSubtitle',
         fontName='Helvetica',
-        fontSize=14,
+        fontSize=15,
         textColor=TEXT_SECONDARY,
-        spaceAfter=20,
+        spaceAfter=24,
         alignment=TA_LEFT,
+        leading=20,
     ))
 
     styles.add(ParagraphStyle(
         name='SectionHeader',
         fontName='Helvetica-Bold',
-        fontSize=18,
+        fontSize=20,
         textColor=PRIMARY,
-        spaceBefore=20,
-        spaceAfter=10,
+        spaceBefore=24,
+        spaceAfter=12,
         alignment=TA_LEFT,
+        leading=24,
     ))
 
     styles.add(ParagraphStyle(
         name='SubHeader',
         fontName='Helvetica-Bold',
-        fontSize=13,
+        fontSize=14,
         textColor=ACCENT,
-        spaceBefore=14,
-        spaceAfter=6,
+        spaceBefore=16,
+        spaceAfter=8,
         alignment=TA_LEFT,
+        leading=18,
     ))
 
     styles.add(ParagraphStyle(
         name='BodyText_Custom',
         fontName='Helvetica',
-        fontSize=10,
+        fontSize=10.5,
         textColor=TEXT_PRIMARY,
-        spaceBefore=4,
-        spaceAfter=4,
-        leading=14,
+        spaceBefore=6,
+        spaceAfter=6,
+        leading=16,
         alignment=TA_JUSTIFY,
     ))
 
     styles.add(ParagraphStyle(
         name='SmallText',
         fontName='Helvetica',
-        fontSize=8,
+        fontSize=9,
         textColor=TEXT_SECONDARY,
-        spaceBefore=2,
-        spaceAfter=2,
+        spaceBefore=3,
+        spaceAfter=3,
+        leading=13,
     ))
 
     styles.add(ParagraphStyle(
         name='ScoreLabel',
         fontName='Helvetica-Bold',
-        fontSize=36,
+        fontSize=40,
         textColor=PRIMARY,
         alignment=TA_CENTER,
+        leading=48,
     ))
 
     styles.add(ParagraphStyle(
         name='HighlightBox',
         fontName='Helvetica',
-        fontSize=10,
+        fontSize=10.5,
         textColor=TEXT_PRIMARY,
         backColor=LIGHT_BG,
-        borderPadding=10,
-        spaceBefore=8,
-        spaceAfter=8,
-        leading=14,
+        borderPadding=12,
+        spaceBefore=10,
+        spaceAfter=10,
+        leading=16,
     ))
 
     styles.add(ParagraphStyle(
         name='CriticalFinding',
         fontName='Helvetica-Bold',
-        fontSize=10,
+        fontSize=10.5,
         textColor=DANGER,
-        spaceBefore=4,
-        spaceAfter=2,
+        spaceBefore=6,
+        spaceAfter=3,
+        leading=15,
     ))
 
     styles.add(ParagraphStyle(
@@ -282,17 +308,17 @@ def build_styles():
         fontName='Helvetica',
         fontSize=10,
         textColor=TEXT_PRIMARY,
-        leftIndent=15,
-        spaceBefore=3,
-        spaceAfter=3,
-        bulletIndent=5,
-        leading=14,
+        leftIndent=18,
+        spaceBefore=4,
+        spaceAfter=4,
+        bulletIndent=6,
+        leading=15,
     ))
 
     styles.add(ParagraphStyle(
         name='Footer',
         fontName='Helvetica',
-        fontSize=8,
+        fontSize=8.5,
         textColor=TEXT_SECONDARY,
         alignment=TA_CENTER,
     ))
@@ -301,52 +327,56 @@ def build_styles():
 
 
 def header_footer(canvas, doc):
-    """Add header and footer to each page."""
+    """Add modern header and footer to each page."""
     canvas.saveState()
 
-    # Header line
+    # Header with gradient-like effect
     canvas.setStrokeColor(ACCENT)
-    canvas.setLineWidth(2)
+    canvas.setLineWidth(3)
     canvas.line(50, letter[1] - 40, letter[0] - 50, letter[1] - 40)
 
-    # Header text
-    canvas.setFont('Helvetica', 8)
-    canvas.setFillColor(TEXT_SECONDARY)
-    canvas.drawString(50, letter[1] - 35, "GEO-SEO Analysis Report")
+    # Header text with better typography
+    canvas.setFont('Helvetica-Bold', 9)
+    canvas.setFillColor(PRIMARY)
+    canvas.drawString(50, letter[1] - 33, "GEO-SEO Analysis Report")
 
-    # Footer
-    canvas.setStrokeColor(lightgrey)
-    canvas.setLineWidth(0.5)
-    canvas.line(50, 40, letter[0] - 50, 40)
+    # Footer with modern styling
+    canvas.setStrokeColor(MEDIUM_BG)
+    canvas.setLineWidth(1)
+    canvas.line(50, 45, letter[0] - 50, 45)
 
-    canvas.setFont('Helvetica', 8)
+    canvas.setFont('Helvetica', 9)
     canvas.setFillColor(TEXT_SECONDARY)
-    canvas.drawString(50, 28, f"Generated {datetime.now().strftime('%B %d, %Y')}")
-    canvas.drawRightString(letter[0] - 50, 28, f"Page {doc.page}")
-    canvas.drawCentredString(letter[0] / 2, 28, "Confidential")
+    canvas.drawString(50, 30, f"Generated {datetime.now().strftime('%B %d, %Y')}")
+    canvas.drawRightString(letter[0] - 50, 30, f"Page {doc.page}")
+
+    # Centered confidential text
+    canvas.setFont('Helvetica', 8)
+    canvas.setFillColor(TEXT_LIGHT)
+    canvas.drawCentredString(letter[0] / 2, 30, "Confidential")
 
     canvas.restoreState()
 
 
 def make_table_style(header_color=PRIMARY):
-    """Create a consistent table style."""
+    """Create a modern, clean table style."""
     return TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), header_color),
         ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
         ('TEXTCOLOR', (0, 1), (-1, -1), TEXT_PRIMARY),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.5, lightgrey),
+        ('GRID', (0, 0), (-1, -1), 0.5, MEDIUM_BG),
         ('BACKGROUND', (0, 1), (-1, -1), WHITE),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, LIGHT_BG]),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        ('LEFTPADDING', (0, 0), (-1, -1), 12),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 12),
     ])
 
 
@@ -402,54 +432,54 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
     # ============================================================
     # COVER PAGE
     # ============================================================
-    elements.append(Spacer(1, 100))
+    elements.append(Spacer(1, 80))
 
-    # Title
+    # Title with modern styling
     elements.append(Paragraph("GEO Analysis Report", styles['ReportTitle']))
-    elements.append(Spacer(1, 8))
+    elements.append(Spacer(1, 10))
 
-    # Subtitle
+    # Subtitle with better spacing
     elements.append(Paragraph(
         f"Generative Engine Optimization Audit for <b>{brand_name}</b>",
         styles['ReportSubtitle']
     ))
 
-    elements.append(HRFlowable(width="100%", thickness=2, color=ACCENT, spaceAfter=20))
+    elements.append(HRFlowable(width="100%", thickness=3, color=ACCENT, spaceAfter=24, spaceBefore=4))
 
-    # Key details table
+    # Key details table with modern styling
     details_data = [
         ["Website", url],
         ["Analysis Date", datetime.strptime(date, "%Y-%m-%d").strftime("%B %d, %Y") if "-" in date else date],
         ["GEO Score", f"{geo_score}/100 — {get_score_label(geo_score)}"],
     ]
 
-    details_table = Table(details_data, colWidths=[120, 350])
+    details_table = Table(details_data, colWidths=[130, 360])
     details_table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
         ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 0), (-1, -1), 11),
         ('TEXTCOLOR', (0, 0), (0, -1), ACCENT),
         ('TEXTCOLOR', (1, 0), (1, -1), TEXT_PRIMARY),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-        ('TOPPADDING', (0, 0), (-1, -1), 10),
-        ('LINEBELOW', (0, 0), (-1, -2), 0.5, lightgrey),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 0), (-1, -1), 12),
+        ('LINEBELOW', (0, 0), (-1, -2), 1, MEDIUM_BG),
     ]))
     elements.append(details_table)
 
-    elements.append(Spacer(1, 30))
+    elements.append(Spacer(1, 40))
 
-    # Score gauge
-    gauge = create_score_gauge(geo_score, 200, 200)
+    # Score gauge with larger size
+    gauge = create_score_gauge(geo_score, 220, 220)
     elements.append(gauge)
 
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 24))
 
-    # Score label
+    # Score label with better styling
     score_color = get_score_color(geo_score)
     elements.append(Paragraph(
         f'<font color="{score_color.hexval()}">{get_score_label(geo_score)}</font>',
         ParagraphStyle('ScoreLabelColored', parent=styles['SectionHeader'],
-                       alignment=TA_CENTER, fontSize=20)
+                       alignment=TA_CENTER, fontSize=22, leading=28)
     ))
 
     elements.append(PageBreak())
@@ -458,7 +488,7 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
     # EXECUTIVE SUMMARY
     # ============================================================
     elements.append(Paragraph("Executive Summary", styles['SectionHeader']))
-    elements.append(HRFlowable(width="100%", thickness=1, color=ACCENT, spaceAfter=12))
+    elements.append(HRFlowable(width="100%", thickness=2, color=ACCENT, spaceAfter=16))
 
     if executive_summary:
         elements.append(Paragraph(executive_summary, styles['BodyText_Custom']))
@@ -472,13 +502,13 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
             styles['BodyText_Custom']
         ))
 
-    elements.append(Spacer(1, 16))
+    elements.append(Spacer(1, 20))
 
     # ============================================================
     # SCORE BREAKDOWN
     # ============================================================
     elements.append(Paragraph("GEO Score Breakdown", styles['SectionHeader']))
-    elements.append(HRFlowable(width="100%", thickness=1, color=ACCENT, spaceAfter=12))
+    elements.append(HRFlowable(width="100%", thickness=2, color=ACCENT, spaceAfter=16))
 
     score_data = [
         ["Component", "Score", "Weight", "Weighted"],
@@ -491,23 +521,26 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
         ["OVERALL", f"{geo_score}/100", "100%", f"{geo_score}"],
     ]
 
-    score_table = Table(score_data, colWidths=[200, 80, 60, 80])
+    score_table = Table(score_data, colWidths=[210, 80, 65, 80])
     style = make_table_style()
 
-    # Bold the last row
+    # Bold and highlight the last row
     style.add('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
-    style.add('BACKGROUND', (0, -1), (-1, -1), MEDIUM_BG)
+    style.add('FONTSIZE', (0, -1), (-1, -1), 11)
+    style.add('BACKGROUND', (0, -1), (-1, -1), ACCENT)
+    style.add('TEXTCOLOR', (0, -1), (-1, -1), WHITE)
 
     # Color-code score cells
     for i in range(1, len(score_data) - 1):
         score_val = int(score_data[i][1].split("/")[0])
         color = get_score_color(score_val)
         style.add('TEXTCOLOR', (1, i), (1, i), color)
+        style.add('FONTNAME', (1, i), (1, i), 'Helvetica-Bold')
 
     score_table.setStyle(style)
     elements.append(score_table)
 
-    elements.append(Spacer(1, 16))
+    elements.append(Spacer(1, 20))
 
     # Score bar chart
     chart_scores = [ai_citability, brand_authority, content_eeat, technical, schema_score, platform_optimization]
@@ -520,33 +553,34 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
     # AI PLATFORM READINESS
     # ============================================================
     elements.append(Paragraph("AI Platform Readiness", styles['SectionHeader']))
-    elements.append(HRFlowable(width="100%", thickness=1, color=ACCENT, spaceAfter=12))
+    elements.append(HRFlowable(width="100%", thickness=2, color=ACCENT, spaceAfter=16))
 
     elements.append(Paragraph(
         "These scores reflect how likely your content is to be cited by each AI search platform. "
         "A score below 50 indicates significant barriers to citation on that platform.",
         styles['BodyText_Custom']
     ))
-    elements.append(Spacer(1, 10))
+    elements.append(Spacer(1, 14))
 
     # Platform chart
     if platforms:
         elements.append(create_platform_chart(platforms))
 
-    elements.append(Spacer(1, 10))
+    elements.append(Spacer(1, 14))
 
-    # Platform table
+    # Platform table with modern styling
     platform_table_data = [["AI Platform", "Score", "Status"]]
     for name, score in platforms.items():
         status = get_score_label(score)
         platform_table_data.append([name, f"{score}/100", status])
 
-    pt = Table(platform_table_data, colWidths=[180, 80, 150])
+    pt = Table(platform_table_data, colWidths=[190, 85, 160])
     pt_style = make_table_style()
     for i in range(1, len(platform_table_data)):
         score_val = int(platform_table_data[i][1].split("/")[0])
         color = get_score_color(score_val)
         pt_style.add('TEXTCOLOR', (1, i), (1, i), color)
+        pt_style.add('FONTNAME', (1, i), (1, i), 'Helvetica-Bold')
     pt.setStyle(pt_style)
     elements.append(pt)
 
@@ -556,14 +590,14 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
     # AI CRAWLER ACCESS
     # ============================================================
     elements.append(Paragraph("AI Crawler Access Status", styles['SectionHeader']))
-    elements.append(HRFlowable(width="100%", thickness=1, color=ACCENT, spaceAfter=12))
+    elements.append(HRFlowable(width="100%", thickness=2, color=ACCENT, spaceAfter=16))
 
     elements.append(Paragraph(
         "Blocking AI crawlers prevents AI platforms from citing your content. "
         "The table below shows which AI crawlers can currently access your site.",
         styles['BodyText_Custom']
     ))
-    elements.append(Spacer(1, 8))
+    elements.append(Spacer(1, 12))
 
     if crawler_access:
         crawler_data = [["Crawler", "Platform", "Status", "Recommendation"]]
@@ -578,23 +612,25 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
             else:
                 crawler_data.append([crawler_name, "", str(info), ""])
 
-        ct = Table(crawler_data, colWidths=[100, 100, 80, 180])
+        ct = Table(crawler_data, colWidths=[100, 100, 85, 180])
         ct_style = make_table_style()
 
-        # Color status cells
+        # Color status cells with better styling
         for i in range(1, len(crawler_data)):
             status = crawler_data[i][2].upper()
             if "ALLOW" in status:
                 ct_style.add('TEXTCOLOR', (2, i), (2, i), SUCCESS)
+                ct_style.add('FONTNAME', (2, i), (2, i), 'Helvetica-Bold')
             elif "BLOCK" in status:
                 ct_style.add('TEXTCOLOR', (2, i), (2, i), DANGER)
+                ct_style.add('FONTNAME', (2, i), (2, i), 'Helvetica-Bold')
 
         ct.setStyle(ct_style)
         elements.append(ct)
     else:
         elements.append(Paragraph(
             "<i>Run /geo crawlers to populate this section with AI crawler access data.</i>",
-            styles['BodyText_Custom']
+            styles['SmallText']
         ))
 
     elements.append(PageBreak())
@@ -603,7 +639,7 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
     # KEY FINDINGS
     # ============================================================
     elements.append(Paragraph("Key Findings", styles['SectionHeader']))
-    elements.append(HRFlowable(width="100%", thickness=1, color=ACCENT, spaceAfter=12))
+    elements.append(HRFlowable(width="100%", thickness=2, color=ACCENT, spaceAfter=16))
 
     if findings:
         for finding in findings:
@@ -613,24 +649,28 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
 
             if severity == "CRITICAL":
                 sev_color = DANGER
+                sev_label = "🔴 CRITICAL"
             elif severity == "HIGH":
                 sev_color = WARNING
+                sev_label = "⚠️ HIGH"
             elif severity == "MEDIUM":
                 sev_color = INFO
+                sev_label = "ℹ️ MEDIUM"
             else:
                 sev_color = TEXT_SECONDARY
+                sev_label = "✓ INFO"
 
             elements.append(Paragraph(
-                f'<font color="{sev_color.hexval()}">[{severity}]</font> <b>{title}</b>',
+                f'<font color="{sev_color.hexval()}"><b>{sev_label}</b></font> — {title}',
                 styles['BodyText_Custom']
             ))
             if description:
                 elements.append(Paragraph(description, styles['Recommendation']))
-            elements.append(Spacer(1, 4))
+            elements.append(Spacer(1, 8))
     else:
         elements.append(Paragraph(
             "<i>Run a full /geo audit to populate findings.</i>",
-            styles['BodyText_Custom']
+            styles['SmallText']
         ))
 
     elements.append(PageBreak())
@@ -639,7 +679,7 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
     # PRIORITIZED ACTION PLAN
     # ============================================================
     elements.append(Paragraph("Prioritized Action Plan", styles['SectionHeader']))
-    elements.append(HRFlowable(width="100%", thickness=1, color=ACCENT, spaceAfter=12))
+    elements.append(HRFlowable(width="100%", thickness=2, color=ACCENT, spaceAfter=16))
 
     # Quick Wins
     elements.append(Paragraph("Quick Wins (This Week)", styles['SubHeader']))
@@ -647,6 +687,7 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
         "High impact, low effort — can be implemented immediately.",
         styles['SmallText']
     ))
+    elements.append(Spacer(1, 6))
 
     if quick_wins:
         for i, action in enumerate(quick_wins, 1):
@@ -666,7 +707,7 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
         for i, action in enumerate(default_wins, 1):
             elements.append(Paragraph(f"<b>{i}.</b> {action}", styles['Recommendation']))
 
-    elements.append(Spacer(1, 12))
+    elements.append(Spacer(1, 16))
 
     # Medium-Term
     elements.append(Paragraph("Medium-Term Improvements (This Month)", styles['SubHeader']))
@@ -674,6 +715,7 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
         "Significant impact, moderate effort — requires content or technical changes.",
         styles['SmallText']
     ))
+    elements.append(Spacer(1, 6))
 
     if medium_term:
         for i, action in enumerate(medium_term, 1):
@@ -693,7 +735,7 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
         for i, action in enumerate(default_medium, 1):
             elements.append(Paragraph(f"<b>{i}.</b> {action}", styles['Recommendation']))
 
-    elements.append(Spacer(1, 12))
+    elements.append(Spacer(1, 16))
 
     # Strategic
     elements.append(Paragraph("Strategic Initiatives (This Quarter)", styles['SubHeader']))
@@ -701,6 +743,7 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
         "Long-term competitive advantage — requires ongoing investment.",
         styles['SmallText']
     ))
+    elements.append(Spacer(1, 6))
 
     if strategic:
         for i, action in enumerate(strategic, 1):
