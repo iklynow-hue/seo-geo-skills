@@ -5,6 +5,7 @@ set -euo pipefail
 # Uninstall script
 
 SKILL_NAME="sgeo"
+[ -z "$HOME" ] && { echo "HOME is not set"; exit 1; }
 CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
 SYMLINK_PATH="$CLAUDE_SKILLS_DIR/$SKILL_NAME"
 

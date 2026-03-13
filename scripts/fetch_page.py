@@ -87,6 +87,25 @@ def fetch_page(
         session = requests.Session()
         session.max_redirects = max_redirects
 
+        # Custom redirect handler to validate each redirect target
+        class SSRFSafeHTTPAdapter(requests.adapters.HTTPAdapter):
+            def send(self, request, **kwargs):
+                # Validate redirect targets
+                parsed_req = urlparse(request.url)
+                try:
+                    resolved = socket.gethostbyname(parsed_req.hostname)
+                    ip_check = ipaddress.ip_address(resolved)
+                    if ip_check.is_private or ip_check.is_loopback or ip_check.is_reserved:
+                        raise requests.exceptions.ConnectionError(
+                            f"Blocked redirect to private IP: {resolved}"
+                        )
+                except (socket.gaierror, ValueError):
+                    pass
+                return super().send(request, **kwargs)
+
+        session.mount("http://", SSRFSafeHTTPAdapter())
+        session.mount("https://", SSRFSafeHTTPAdapter())
+
         response = session.get(
             url,
             headers=DEFAULT_HEADERS,

@@ -14,6 +14,7 @@ Usage:
 import argparse
 import json
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin, urlparse
 
@@ -31,6 +32,11 @@ except ImportError:
 
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; SEOSkill/1.0)"}
+
+# Performance optimization: Create a session for connection pooling
+# Reuses TCP connections across multiple requests for better performance
+SESSION = requests.Session()
+SESSION.headers.update(HEADERS)
 
 
 def extract_links(html: str, base_url: str) -> list:
@@ -61,46 +67,65 @@ def extract_links(html: str, base_url: str) -> list:
     return links
 
 
-def check_link(link: dict, timeout: int = 10) -> dict:
+def check_link(link: dict, session: requests.Session, timeout: int = 10, verify: bool = True) -> dict:
     """Check a single link's HTTP status."""
     url = link["url"]
     result = {**link, "status": None, "error": None, "redirect": None, "response_time_ms": None}
 
-    try:
-        resp = requests.head(url, timeout=timeout, headers=HEADERS,
-                             allow_redirects=True, verify=False)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Performance optimization: Use session for connection pooling
+            resp = session.head(url, timeout=timeout, allow_redirects=True, verify=verify)
 
-        # Some servers reject HEAD, fall back to GET
-        if resp.status_code == 405:
-            resp = requests.get(url, timeout=timeout, headers=HEADERS,
-                                allow_redirects=True, verify=False, stream=True)
+            if resp.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 3
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    result["error"] = "rate_limited"
+                    return result
 
-        result["status"] = resp.status_code
-        result["response_time_ms"] = round(resp.elapsed.total_seconds() * 1000)
+            # Some servers reject HEAD, fall back to GET
+            if resp.status_code == 405:
+                resp = session.get(url, timeout=timeout, allow_redirects=True, verify=verify, stream=True)
 
-        # Check if redirected
-        if resp.history:
-            result["redirect"] = {
-                "from": url,
-                "to": resp.url,
-                "hops": len(resp.history),
-                "codes": [r.status_code for r in resp.history],
-            }
+            result["status"] = resp.status_code
+            result["response_time_ms"] = round(resp.elapsed.total_seconds() * 1000)
 
-    except requests.exceptions.Timeout:
-        result["error"] = "timeout"
-    except requests.exceptions.ConnectionError:
-        result["error"] = "connection_failed"
-    except requests.exceptions.TooManyRedirects:
-        result["error"] = "too_many_redirects"
-    except requests.exceptions.RequestException as e:
-        result["error"] = str(e)[:100]
+            # Check if redirected
+            if resp.history:
+                result["redirect"] = {
+                    "from": url,
+                    "to": resp.url,
+                    "hops": len(resp.history),
+                    "codes": [r.status_code for r in resp.history],
+                }
+            return result
+
+        except requests.exceptions.Timeout:
+            if attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+            result["error"] = "timeout"
+            return result
+        except requests.exceptions.ConnectionError:
+            result["error"] = "connection_failed"
+            return result
+        except requests.exceptions.TooManyRedirects:
+            result["error"] = "too_many_redirects"
+            return result
+        except requests.exceptions.RequestException as e:
+            result["error"] = str(e)[:100]
+            return result
 
     return result
 
 
 def check_broken_links(url: str, internal_only: bool = False,
-                       max_workers: int = 10, timeout: int = 10) -> dict:
+                       max_workers: int = 10, timeout: int = 10,
+                       verify: bool = True) -> dict:
     """
     Check all links on a page for broken links.
 
@@ -109,6 +134,7 @@ def check_broken_links(url: str, internal_only: bool = False,
         internal_only: Only check internal links
         max_workers: Concurrent request threads
         timeout: Per-request timeout in seconds
+        verify: Verify SSL certificates
 
     Returns:
         Dictionary with all link check results
@@ -127,15 +153,38 @@ def check_broken_links(url: str, internal_only: bool = False,
     }
 
     # Fetch page
-    try:
-        resp = requests.get(url, timeout=15, headers=HEADERS)
-        if resp.status_code != 200:
-            result["error"] = f"Failed to fetch page: HTTP {resp.status_code}"
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Performance optimization: Use session for connection pooling
+            resp = SESSION.get(url, timeout=15, verify=verify)
+
+            if resp.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 3
+                    print(f"  [broken_links] Rate limited. Retrying in {wait_time}s...", file=sys.stderr)
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    result["error"] = "Rate limited. Wait a few minutes and try again."
+                    return result
+
+            if resp.status_code != 200:
+                result["error"] = f"Failed to fetch page: HTTP {resp.status_code}"
+                return result
+            html = resp.text
+            break
+
+        except requests.exceptions.Timeout:
+            if attempt < max_retries - 1:
+                print(f"  [broken_links] Timeout. Retrying...", file=sys.stderr)
+                time.sleep(2)
+                continue
+            result["error"] = "Failed to fetch page: Request timed out"
             return result
-        html = resp.text
-    except requests.exceptions.RequestException as e:
-        result["error"] = f"Failed to fetch page: {e}"
-        return result
+        except requests.exceptions.RequestException as e:
+            result["error"] = f"Failed to fetch page: {e}"
+            return result
 
     # Extract links
     links = extract_links(html, url)
@@ -150,10 +199,17 @@ def check_broken_links(url: str, internal_only: bool = False,
 
     # Check all links concurrently
     checked = []
+    total_links = len(links)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(check_link, link, timeout): link for link in links}
+        # Performance optimization: Pass session to each worker for connection pooling
+        futures = {executor.submit(check_link, link, SESSION, timeout, verify): link for link in links}
         for future in as_completed(futures):
             checked.append(future.result())
+
+            # Progress indicator
+            if len(checked) % 10 == 0 or len(checked) == total_links:
+                progress_pct = int((len(checked) / total_links) * 100)
+                print(f"Checking links: {len(checked)}/{total_links} ({progress_pct}%)...", file=sys.stderr)
 
     result["checked"] = len(checked)
 
@@ -211,10 +267,19 @@ def main():
                         help="Concurrent workers (default: 10)")
     parser.add_argument("--timeout", "-t", type=int, default=10,
                         help="Per-link timeout in seconds (default: 10)")
+    parser.add_argument("--no-verify", action="store_true",
+                        help="Disable SSL certificate verification")
 
     args = parser.parse_args()
+
+    verify = not args.no_verify
+    if not verify:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
     result = check_broken_links(args.url, internal_only=args.internal_only,
-                                max_workers=args.workers, timeout=args.timeout)
+                                max_workers=args.workers, timeout=args.timeout,
+                                verify=verify)
 
     if args.json:
         print(json.dumps(result, indent=2))

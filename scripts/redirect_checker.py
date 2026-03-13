@@ -13,6 +13,7 @@ Usage:
 import argparse
 import json
 import sys
+import time
 from urllib.parse import urlparse
 
 try:
@@ -56,61 +57,85 @@ def check_redirects(url: str, max_redirects: int = 10, timeout: int = 10) -> dic
     seen = set()
     current = url
 
-    try:
-        for i in range(max_redirects + 1):
-            if current in seen:
-                result["has_loop"] = True
-                result["issues"].append(f"🔴 Redirect loop detected at: {current}")
-                break
-            seen.add(current)
+    max_retries = 3
+    for i in range(max_redirects + 1):
+        if current in seen:
+            result["has_loop"] = True
+            result["issues"].append(f"🔴 Redirect loop detected at: {current}")
+            break
+        seen.add(current)
 
-            resp = requests.head(current, timeout=timeout, headers=HEADERS,
-                                 allow_redirects=False)
+        for attempt in range(max_retries):
+            try:
+                resp = requests.head(current, timeout=timeout, headers=HEADERS,
+                                     allow_redirects=False)
 
-            hop = {
-                "step": i + 1,
-                "url": current,
-                "status": resp.status_code,
-                "time_ms": round(resp.elapsed.total_seconds() * 1000),
-            }
+                if resp.status_code == 429:
+                    if attempt < max_retries - 1:
+                        wait_time = (attempt + 1) * 3
+                        print(f"  [redirect_checker] Rate limited. Retrying in {wait_time}s...", file=sys.stderr)
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        result["error"] = "Rate limited. Wait a few minutes and try again."
+                        return result
 
-            if resp.status_code in (301, 302, 303, 307, 308):
-                location = resp.headers.get("Location", "")
-                if not location:
-                    hop["error"] = "Redirect with no Location header"
+                hop = {
+                    "step": i + 1,
+                    "url": current,
+                    "status": resp.status_code,
+                    "time_ms": round(resp.elapsed.total_seconds() * 1000),
+                }
+
+                if resp.status_code in (301, 302, 303, 307, 308):
+                    location = resp.headers.get("Location", "")
+                    if not location:
+                        hop["error"] = "Redirect with no Location header"
+                        result["chain"].append(hop)
+                        result["issues"].append(f"🔴 Redirect at step {i+1} has no Location header")
+                        break
+
+                    # Resolve relative URLs
+                    if not urlparse(location).scheme:
+                        from urllib.parse import urljoin
+                        location = urljoin(current, location)
+
+                    hop["redirect_to"] = location
+                    hop["redirect_type"] = {
+                        301: "permanent (301)",
+                        302: "temporary (302)",
+                        303: "see other (303)",
+                        307: "temporary (307)",
+                        308: "permanent (308)",
+                    }.get(resp.status_code, f"unknown ({resp.status_code})")
+
                     result["chain"].append(hop)
-                    result["issues"].append(f"🔴 Redirect at step {i+1} has no Location header")
-                    break
-
-                # Resolve relative URLs
-                if not urlparse(location).scheme:
-                    from urllib.parse import urljoin
-                    location = urljoin(current, location)
-
-                hop["redirect_to"] = location
-                hop["redirect_type"] = {
-                    301: "permanent (301)",
-                    302: "temporary (302)",
-                    303: "see other (303)",
-                    307: "temporary (307)",
-                    308: "permanent (308)",
-                }.get(resp.status_code, f"unknown ({resp.status_code})")
-
-                result["chain"].append(hop)
-                result["total_time_ms"] += hop["time_ms"]
-                current = location
-            else:
-                # Final destination
-                hop["final"] = True
-                result["chain"].append(hop)
-                result["final_url"] = current
-                result["total_time_ms"] += hop["time_ms"]
+                    result["total_time_ms"] += hop["time_ms"]
+                    current = location
+                else:
+                    # Final destination
+                    hop["final"] = True
+                    result["chain"].append(hop)
+                    result["final_url"] = current
+                    result["total_time_ms"] += hop["time_ms"]
+                    return result
                 break
-        else:
-            result["issues"].append(f"🔴 Too many redirects (>{max_redirects})")
 
-    except requests.exceptions.RequestException as e:
-        result["error"] = str(e)
+            except requests.exceptions.Timeout:
+                if attempt < max_retries - 1:
+                    print(f"  [redirect_checker] Timeout. Retrying...", file=sys.stderr)
+                    time.sleep(2)
+                    continue
+                result["error"] = "Request timed out"
+                return result
+            except requests.exceptions.RequestException as e:
+                result["error"] = str(e)
+                return result
+
+        if hop.get("error"):
+            break
+    else:
+        result["issues"].append(f"🔴 Too many redirects (>{max_redirects})")
 
     result["total_hops"] = max(0, len(result["chain"]) - 1)
 

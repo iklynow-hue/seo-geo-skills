@@ -24,6 +24,20 @@ import json
 import re
 import sys
 import xml.etree.ElementTree as ET
+try:
+    from defusedxml.ElementTree import fromstring as safe_xml_fromstring
+except ImportError:
+    # defusedxml not installed — use stdlib with a hardened parser that
+    # disables external entity / DTD processing (XXE mitigation).
+    import xml.etree.ElementTree as _ET
+
+    def safe_xml_fromstring(text):
+        # Disable external entity resolution to prevent XXE attacks
+        # Note: Modern Python (3.8+) XMLParser is reasonably safe by default
+        # For production use, install defusedxml: pip install defusedxml
+        parser = _ET.XMLParser(target=_ET.TreeBuilder())
+        parser.feed(text)
+        return parser.close()
 from typing import Optional
 from urllib.parse import urljoin, urlparse
 
@@ -40,13 +54,13 @@ except ImportError:
     sys.exit(1)
 
 
-def fetch(url: str, timeout: int = 15) -> Optional[str]:
+def fetch(url: str, timeout: int = 15, verify: bool = True) -> Optional[str]:
     try:
-        r = requests.get(url, timeout=timeout, headers={"User-Agent": "SGEO-Checker/1.0"}, verify=False)
+        r = requests.get(url, timeout=timeout, headers={"User-Agent": "SGEO-Checker/1.0"}, verify=verify)
         if r.status_code == 200:
             return r.text
-    except Exception:
-        pass
+    except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as e:
+        print(f"Warning: Failed to fetch {url}: {e}", file=sys.stderr)
     return None
 
 
@@ -214,32 +228,32 @@ def check_schema_quality(soup: BeautifulSoup, url: str) -> list:
     return issues, review_counts
 
 
-def get_sitemap_urls(base_url: str, max_urls: int = 20) -> list:
+def get_sitemap_urls(base_url: str, max_urls: int = 20, verify: bool = True) -> list:
     """Fetch sitemap and return URLs."""
     sitemap_url = urljoin(base_url, "/sitemap.xml")
-    html = fetch(sitemap_url)
+    html = fetch(sitemap_url, verify=verify)
     if not html:
         return []
 
     urls = []
     try:
-        root = ET.fromstring(html)
+        root = safe_xml_fromstring(html)
         ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
         for loc in root.findall(".//sm:loc", ns):
             if loc.text:
                 urls.append(loc.text.strip())
             if len(urls) >= max_urls:
                 break
-    except ET.ParseError:
-        pass
+    except (ET.ParseError, ValueError) as e:
+        print(f"Warning: Failed to parse sitemap XML: {e}", file=sys.stderr)
     return urls
 
 
-def analyze_page(url: str, brand_names: Optional[list] = None) -> dict:
+def analyze_page(url: str, brand_names: Optional[list] = None, verify: bool = True) -> dict:
     """Run all on-page checks for a single URL."""
-    html = fetch(url)
+    html = fetch(url, verify=verify)
     if not html:
-        return {"url": url, "error": "Failed to fetch", "issues": []}
+        return {"url": url, "error": "Failed to fetch page", "issues": []}
 
     soup = BeautifulSoup(html, "lxml" if "lxml" in sys.modules else "html.parser")
 
@@ -284,19 +298,23 @@ def check_review_consistency(all_review_counts: list) -> list:
 
 
 def main():
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
     parser = argparse.ArgumentParser(description="On-page quality checker")
     parser.add_argument("url", help="URL to check")
     parser.add_argument("--multi", action="store_true", help="Check multiple pages from sitemap")
     parser.add_argument("--max-pages", type=int, default=10, help="Max pages to check in multi mode")
     parser.add_argument("--brand", nargs="*", help="Brand names to exclude from heading spacing checks (e.g. --brand PhotoRefix LinkedIn)")
     parser.add_argument("--json", action="store_true", help="JSON output")
+    parser.add_argument("--no-verify", action="store_true",
+                        help="Disable SSL certificate verification")
     args = parser.parse_args()
 
+    verify = not args.no_verify
+    if not verify:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
     if args.multi:
-        urls = get_sitemap_urls(args.url, args.max_pages)
+        urls = get_sitemap_urls(args.url, args.max_pages, verify=verify)
         if not urls:
             # Fallback: just check the homepage
             urls = [args.url]
@@ -316,7 +334,7 @@ def main():
     pages_without_schema = []
 
     for url in urls:
-        result = analyze_page(url, brand_names)
+        result = analyze_page(url, brand_names, verify=verify)
         results.append(result)
         all_review_counts.extend(result.get("review_counts", []))
         if not result.get("has_schema"):

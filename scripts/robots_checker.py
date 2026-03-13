@@ -10,6 +10,7 @@ Usage:
 import argparse
 import json
 import sys
+import time
 from urllib.parse import urljoin, urlparse
 
 try:
@@ -65,28 +66,50 @@ def fetch_robots_txt(url: str, timeout: int = 15) -> dict:
         "error": None,
     }
 
-    try:
-        resp = requests.get(robots_url, timeout=timeout, headers={
-            "User-Agent": "Mozilla/5.0 (compatible; SEOSkill/1.0)"
-        })
-        result["status"] = resp.status_code
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            resp = requests.get(robots_url, timeout=timeout, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; SEOSkill/1.0)"
+            })
 
-        if resp.status_code == 404:
-            result["issues"].append("🔴 No robots.txt found — all crawlers allowed by default")
-            # Still check AI crawlers
-            for crawler in AI_CRAWLERS:
-                result["ai_crawler_status"][crawler] = "allowed (no robots.txt)"
+            if resp.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 3
+                    print(f"  [robots_checker] Rate limited. Retrying in {wait_time}s...", file=sys.stderr)
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    result["error"] = "Rate limited. Wait a few minutes and try again."
+                    return result
+
+            result["status"] = resp.status_code
+
+            if resp.status_code == 404:
+                result["issues"].append("🔴 No robots.txt found — all crawlers allowed by default")
+                # Still check AI crawlers
+                for crawler in AI_CRAWLERS:
+                    result["ai_crawler_status"][crawler] = "allowed (no robots.txt)"
+                return result
+
+            if resp.status_code != 200:
+                result["error"] = f"HTTP {resp.status_code}"
+                return result
+
+            result["raw"] = resp.text
+            _parse_robots(resp.text, result)
+            break
+
+        except requests.exceptions.Timeout:
+            if attempt < max_retries - 1:
+                print(f"  [robots_checker] Timeout. Retrying...", file=sys.stderr)
+                time.sleep(2)
+                continue
+            result["error"] = "Request timed out"
             return result
-
-        if resp.status_code != 200:
-            result["error"] = f"HTTP {resp.status_code}"
+        except requests.exceptions.RequestException as e:
+            result["error"] = str(e)
             return result
-
-        result["raw"] = resp.text
-        _parse_robots(resp.text, result)
-
-    except requests.exceptions.RequestException as e:
-        result["error"] = str(e)
 
     return result
 
@@ -94,6 +117,7 @@ def fetch_robots_txt(url: str, timeout: int = 15) -> dict:
 def _parse_robots(content: str, result: dict):
     """Parse robots.txt content into structured data."""
     current_agents = []
+    last_was_user_agent = False
 
     for line in content.splitlines():
         line = line.strip()
@@ -111,11 +135,16 @@ def _parse_robots(content: str, result: dict):
         value = value.strip()
 
         if directive == "user-agent":
-            current_agents = [value]
+            if not last_was_user_agent:
+                current_agents = [value]
+            else:
+                current_agents.append(value)
+            last_was_user_agent = True
             if value not in result["user_agents"]:
                 result["user_agents"][value] = {"allow": [], "disallow": []}
 
         elif directive == "disallow" and current_agents:
+            last_was_user_agent = False
             for agent in current_agents:
                 if agent not in result["user_agents"]:
                     result["user_agents"][agent] = {"allow": [], "disallow": []}
@@ -123,15 +152,18 @@ def _parse_robots(content: str, result: dict):
                     result["user_agents"][agent]["disallow"].append(value)
 
         elif directive == "allow" and current_agents:
+            last_was_user_agent = False
             for agent in current_agents:
                 if agent not in result["user_agents"]:
                     result["user_agents"][agent] = {"allow": [], "disallow": []}
                 result["user_agents"][agent]["allow"].append(value)
 
         elif directive == "sitemap":
+            last_was_user_agent = False
             result["sitemaps"].append(value)
 
         elif directive == "crawl-delay" and current_agents:
+            last_was_user_agent = False
             for agent in current_agents:
                 try:
                     result["crawl_delays"][agent] = float(value)

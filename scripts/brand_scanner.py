@@ -113,6 +113,7 @@ def check_wikipedia_presence(brand_name: str) -> dict:
         "search_url": f"https://en.wikipedia.org/wiki/Special:Search?search={quote_plus(brand_name)}",
         "wikidata_url": f"https://www.wikidata.org/w/index.php?search={quote_plus(brand_name)}",
         "recommendations": [],
+        "error": None,
     }
 
     # Check Wikipedia API
@@ -128,8 +129,9 @@ def check_wikipedia_presence(brand_name: str) -> dict:
                 if brand_name.lower() in top_title:
                     result["has_wikipedia_page"] = True
                 result["wikipedia_search_results"] = len(search_results)
-    except Exception:
-        pass
+    except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as e:
+        print(f"Warning: Wikipedia API check failed for '{brand_name}': {e}", file=sys.stderr)
+        result["error"] = f"Wikipedia API error: {str(e)}"
 
     # Check Wikidata
     try:
@@ -142,8 +144,10 @@ def check_wikipedia_presence(brand_name: str) -> dict:
                 result["has_wikidata_entry"] = True
                 result["wikidata_id"] = entities[0].get("id", "")
                 result["wikidata_description"] = entities[0].get("description", "")
-    except Exception:
-        pass
+    except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as e:
+        print(f"Warning: Wikidata API check failed for '{brand_name}': {e}", file=sys.stderr)
+        if not result["error"]:
+            result["error"] = f"Wikidata API error: {str(e)}"
 
     result["recommendations"] = [
         "If eligible, create a Wikipedia article (requires notability criteria)",

@@ -7,8 +7,8 @@ Produces dual scores: **SEO Score** (traditional search) and **GEO Score** (AI s
 
 ```bash
 # Clone
-git clone https://github.com/iklynow-hue/seo-geo-skills.git
-cd seo-geo-skills
+git clone <your-repository-url>
+cd seo-geo-master-check
 
 # Install (macOS / Linux)
 bash install.sh
@@ -25,7 +25,7 @@ claude
 
 - **Dual Scoring**: Independent SEO and GEO scores from single audit
 - **MECE Framework**: No overlap, complete coverage across 10 categories
-- **Script-Backed**: 19+ Python scripts for deterministic verification
+- **Script-Backed**: 22 Python scripts for deterministic verification
 - **Cross-Platform**: Works on macOS, Linux, and Windows
 - **FAQPage Policy**: Keep FAQPage schema for AI search benefits (despite Google restriction)
 
@@ -40,6 +40,10 @@ claude
 | `sgeo schema <url>` | Schema validation |
 | `sgeo content <url>` | Content quality & citability |
 | `sgeo brand <url>` | Brand authority scan |
+| `sgeo technical <url>` | Technical infrastructure checks |
+| `sgeo github <repo>` | GitHub repository SEO optimization |
+| `sgeo compare <url>` | Side-by-side SEO vs GEO score comparison |
+| `sgeo llmstxt <url>` | llms.txt analysis and generation |
 
 ## Scoring
 
@@ -106,7 +110,7 @@ seo-geo-skills/
 ├── install.ps1                 # Install script (Windows)
 ├── uninstall.sh                # Uninstall script (macOS/Linux)
 ├── uninstall.ps1               # Uninstall script (Windows)
-├── scripts/                    # 19+ audit scripts
+├── scripts/                    # 22 audit scripts
 │   ├── fetch_page.py
 │   ├── parse_html.py
 │   ├── robots_checker.py
@@ -118,10 +122,15 @@ seo-geo-skills/
 │   ├── social_meta.py
 │   ├── internal_links.py
 │   ├── pagespeed.py
-│   ├── validate_schema.py
+│   ├── schema_validator.py
 │   ├── citability_scorer.py
 │   ├── brand_scanner.py
 │   ├── llmstxt_generator.py
+│   ├── onpage_checker.py
+│   ├── duplicate_content.py
+│   ├── hreflang_checker.py
+│   ├── link_profile.py
+│   ├── sgeo_to_pdf_bridge.py
 │   ├── generate_report.py      # HTML dashboard generator
 │   └── generate_pdf_report.py  # PDF report generator
 └── resources/
@@ -141,7 +150,112 @@ After running `sgeo audit <url>`, you'll get:
 
 1. **SGEO-AUDIT-REPORT.md** — Detailed findings with MECE categorization
 2. **SGEO-ACTION-PLAN.md** — Prioritized fixes tagged as SEO, GEO, or Both
-3. **SGEO-REPORT.html** — Interactive dashboard with dual scores (if scripts run)
+3. **SGEO-REPORT.html** — Interactive dashboard with dual scores
+4. **SGEO-REPORT.pdf** — PDF version of the report (requires reportlab)
+
+### PDF Reports
+
+Generate both HTML and PDF reports:
+```bash
+python scripts/generate_report.py https://example.com
+# Outputs: outputs/<domain>/SGEO-REPORT.html + SGEO-REPORT.pdf
+```
+
+Skip PDF generation:
+```bash
+python scripts/generate_report.py https://example.com --no-pdf
+```
+
+Skip auto-opening in browser:
+```bash
+python scripts/generate_report.py https://example.com --no-open
+```
+
+## Configuration
+
+SGEO supports configuration files to set default options without CLI flags. Configuration is loaded from multiple sources with the following priority (highest to lowest):
+
+1. CLI flags (highest priority)
+2. `sgeo.config.json` in project root
+3. `~/.sgeorc` (YAML format, requires PyYAML)
+4. Default values (lowest priority)
+
+### Supported Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `timeout` | 30 | Script execution timeout in seconds |
+| `max_workers` | 10 | Number of parallel workers for audit scripts |
+| `user_agent` | SGEO-Audit-Bot/1.0 | Custom user agent for HTTP requests |
+| `api_keys.pagespeed` | null | PageSpeed Insights API key |
+| `output_dir` | outputs/ | Output directory for reports |
+| `auto_open_report` | true | Auto-open HTML report in browser |
+| `generate_pdf` | true | Generate PDF report along with HTML |
+
+### Setup
+
+#### Global Configuration (YAML)
+
+Create `~/.sgeorc` for user-wide settings:
+
+```bash
+cp .sgeorc.example ~/.sgeorc
+# Edit with your preferences
+nano ~/.sgeorc
+```
+
+Example `~/.sgeorc`:
+```yaml
+timeout: 30
+max_workers: 10
+api_keys:
+  pagespeed: "YOUR_API_KEY_HERE"
+auto_open_report: true
+generate_pdf: true
+```
+
+Requires PyYAML:
+```bash
+pip install pyyaml
+```
+
+#### Project Configuration (JSON)
+
+Create `sgeo.config.json` in project root for project-specific settings:
+
+```bash
+cp sgeo.config.json.example sgeo.config.json
+# Edit with your preferences
+nano sgeo.config.json
+```
+
+Example `sgeo.config.json`:
+```json
+{
+  "timeout": 30,
+  "max_workers": 10,
+  "api_keys": {
+    "pagespeed": "YOUR_API_KEY_HERE"
+  },
+  "auto_open_report": false,
+  "generate_pdf": true
+}
+```
+
+### CLI Override
+
+CLI flags always override config file values:
+
+```bash
+# Use config file settings
+python scripts/generate_report.py https://example.com
+
+# Override workers from config
+python scripts/generate_report.py https://example.com --workers 20
+
+# Override timeout from config
+python scripts/generate_report.py https://example.com --timeout 60
+```
 
 ## Key Principles
 
@@ -213,12 +327,63 @@ python3 scripts/generate_report.py https://example.com
 python3 scripts/generate_report.py https://example.com --no-open
 ```
 
+## Testing
+
+### Running Tests
+
+The project includes a comprehensive pytest test suite covering all major functionality.
+
+#### Install Test Dependencies
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+#### Run All Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with verbose output
+pytest -v
+
+# Run with coverage report
+pytest --cov=scripts --cov-report=html
+
+# Run specific test file
+pytest tests/test_schema_validator.py
+
+# Run specific test class
+pytest tests/test_robots_checker.py::TestParseRobots
+
+# Run specific test
+pytest tests/test_readability.py::TestCountSyllables::test_single_syllable_words
+```
+
+#### Test Coverage
+
+The test suite includes:
+
+- **test_schema_validator.py** - JSON-LD validation, FAQPage handling, deprecated schemas, placeholder detection
+- **test_robots_checker.py** - robots.txt parsing, AI crawler detection, sitemap validation, crawl-delay handling
+- **test_llms_txt_checker.py** - llms.txt validation, format checking, content generation
+- **test_security_headers.py** - HTTPS detection, security header validation, HSTS configuration, scoring
+- **test_readability.py** - Syllable counting, Flesch scores, sentence analysis, text extraction
+
+All tests use mocked HTTP responses (via `responses` library) to avoid external dependencies.
+
 ## Dependencies
 
 ### Required
 ```bash
 python3 -m pip install requests beautifulsoup4 lxml
 # On Windows, use: python -m pip install requests beautifulsoup4 lxml
+```
+
+### Development
+```bash
+python3 -m pip install -r requirements-dev.txt
 ```
 
 ### Optional

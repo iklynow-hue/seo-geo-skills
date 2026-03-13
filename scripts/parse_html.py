@@ -142,7 +142,8 @@ def parse_html(html: str, base_url: Optional[str] = None) -> dict:
         "HowTo", "SpecialAnnouncement", "CourseInfo", "EstimatedSalary",
         "LearningVideo", "ClaimReview", "VehicleListing", "PracticeProblems",
     }
-    RESTRICTED_SCHEMA = {"FAQPage"}  # government/healthcare only
+    # Note: FAQPage restricted for Google rich results but valuable for AI search
+    INFORMATIONAL_SCHEMA = {"FAQPage"}  # Keep for GEO benefits
 
     for script in soup.find_all("script", type="application/ld+json"):
         try:
@@ -161,9 +162,9 @@ def parse_html(html: str, base_url: Optional[str] = None) -> dict:
         if schema_type in DEPRECATED_SCHEMA:
             status = "deprecated"
             note = f"{schema_type} was deprecated/removed from rich results. Remove or replace."
-        elif schema_type in RESTRICTED_SCHEMA:
-            status = "restricted"
-            note = f"{schema_type} is restricted to government/healthcare authority sites only."
+        elif schema_type in INFORMATIONAL_SCHEMA:
+            status = "informational"
+            note = f"{schema_type} restricted for Google rich results (gov/healthcare only) but recommended for AI search engines. Keep for GEO benefits."
 
         result["schema"].append({
             "@type": schema_type,

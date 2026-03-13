@@ -1,0 +1,28 @@
+# SGEO Configuration File (YAML format)
+# Copy this file to ~/.sgeorc to use as your global config
+# Requires PyYAML: pip install pyyaml
+
+# Script execution timeout in seconds
+timeout: 30
+
+# Maximum number of parallel workers for audit scripts
+max_workers: 10
+
+# Custom user agent for HTTP requests
+user_agent: "SGEO-Audit-Bot/1.0 (SEO+GEO Analysis)"
+
+# API keys for external services
+api_keys:
+  # PageSpeed Insights API key (optional, but recommended to avoid rate limits)
+  # Get your key at: https://developers.google.com/speed/docs/insights/v5/get-started
+  pagespeed: null  # Replace with your API key: "YOUR_API_KEY_HERE"
+
+# Output directory for reports (relative to project root)
+output_dir: "outputs/"
+
+# Automatically open HTML report in browser after generation
+auto_open_report: true
+
+# Generate PDF report along with HTML report
+# Requires reportlab: pip install reportlab
+generate_pdf: true

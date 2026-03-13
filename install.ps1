@@ -3,15 +3,18 @@
 
 $ErrorActionPreference = "Stop"
 
+function Write-Fail  { param($msg) Write-Host "[FAIL] $msg" -ForegroundColor Red; exit 1 }
+
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $ScriptDir) { Write-Fail "Cannot determine script directory. Run the script directly." }
 $SkillName = "sgeo"
+if (-not $env:USERPROFILE) { Write-Fail "USERPROFILE environment variable is not set." }
 $ClaudeSkillsDir = Join-Path $env:USERPROFILE ".claude\skills"
 $Requirements = @("requests", "beautifulsoup4", "lxml")
 
 function Write-Info  { param($msg) Write-Host "[INFO] $msg" -ForegroundColor Blue }
 function Write-Ok    { param($msg) Write-Host "[OK]   $msg" -ForegroundColor Green }
 function Write-Warn  { param($msg) Write-Host "[WARN] $msg" -ForegroundColor Yellow }
-function Write-Fail  { param($msg) Write-Host "[FAIL] $msg" -ForegroundColor Red; exit 1 }
 
 Write-Host ""
 Write-Host "+==============================================+"
@@ -32,8 +35,11 @@ if (Get-Command python3 -ErrorAction SilentlyContinue) {
 }
 
 $PyVersion = & $PY -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to determine Python version." }
 $PyMajor = & $PY -c "import sys; print(sys.version_info.major)"
+if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to determine Python major version." }
 $PyMinor = & $PY -c "import sys; print(sys.version_info.minor)"
+if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to determine Python minor version." }
 
 if ([int]$PyMajor -lt 3 -or ([int]$PyMajor -eq 3 -and [int]$PyMinor -lt 8)) {
     Write-Fail "Python 3.8+ required. Found: $PyVersion"
@@ -54,6 +60,7 @@ Write-Ok "pip available"
 # --- 3. Install Python dependencies ---
 Write-Info "Installing Python dependencies..."
 & $PY -m pip install --quiet --upgrade $Requirements
+if ($LASTEXITCODE -ne 0) { Write-Fail "pip install failed" }
 Write-Ok "Dependencies installed: $($Requirements -join ', ')"
 
 # --- 4. Optional: Playwright ---

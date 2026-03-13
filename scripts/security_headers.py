@@ -13,6 +13,7 @@ Usage:
 import argparse
 import json
 import sys
+import time
 from urllib.parse import urlparse
 
 try:
@@ -90,60 +91,82 @@ def check_security_headers(url: str, timeout: int = 15) -> dict:
         "error": None,
     }
 
-    try:
-        resp = requests.get(url, timeout=timeout, headers={
-            "User-Agent": "Mozilla/5.0 (compatible; SEOSkill/1.0)"
-        }, allow_redirects=True)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            resp = requests.get(url, timeout=timeout, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; SEOSkill/1.0)"
+            }, allow_redirects=True)
 
-        # Check HTTPS
-        if resp.url.startswith("https://"):
-            result["https"] = True
-            result["score"] += 25
-        else:
-            result["issues"].append("🔴 Site not using HTTPS — critical for SEO and trust")
-            result["recommendations"].append("Migrate to HTTPS and set up 301 redirects from HTTP")
+            if resp.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 3
+                    print(f"  [security_headers] Rate limited. Retrying in {wait_time}s...", file=sys.stderr)
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    result["error"] = "Rate limited. Wait a few minutes and try again."
+                    return result
 
-        # Check each security header
-        response_headers = {k.lower(): v for k, v in resp.headers.items()}
-
-        for header_key, header_info in SECURITY_HEADERS.items():
-            if header_key in response_headers:
-                value = response_headers[header_key]
-                result["headers_present"][header_info["label"]] = value
-                result["header_values"][header_key] = value
-                result["score"] += header_info["weight"]
-
-                # Validate HSTS specifics
-                if header_key == "strict-transport-security":
-                    if "max-age=" in value.lower():
-                        try:
-                            max_age = int(value.lower().split("max-age=")[1].split(";")[0].strip())
-                            if max_age < 31536000:
-                                result["issues"].append(
-                                    f"⚠️ HSTS max-age is {max_age}s — recommend at least 31536000 (1 year)"
-                                )
-                        except (ValueError, IndexError):
-                            pass
-                    if "includesubdomains" not in value.lower():
-                        result["issues"].append("⚠️ HSTS missing includeSubDomains directive")
+            # Check HTTPS
+            if resp.url.startswith("https://"):
+                result["https"] = True
+                result["score"] += 25
             else:
-                result["headers_missing"][header_info["label"]] = header_info["description"]
-                result["recommendations"].append(
-                    f"{header_info['label']}: {header_info['recommendation']}"
-                )
+                result["issues"].append("🔴 Site not using HTTPS — critical for SEO and trust")
+                result["recommendations"].append("Migrate to HTTPS and set up 301 redirects from HTTP")
 
-        # Cap score at 100
-        result["score"] = min(result["score"], 100)
+            # Check each security header
+            response_headers = {k.lower(): v for k, v in resp.headers.items()}
 
-        # Summary issues
-        missing_count = len(result["headers_missing"])
-        if missing_count > 3:
-            result["issues"].append(f"🔴 {missing_count} security headers missing — poor security posture")
-        elif missing_count > 0:
-            result["issues"].append(f"⚠️ {missing_count} security header(s) missing")
+            for header_key, header_info in SECURITY_HEADERS.items():
+                if header_key in response_headers:
+                    value = response_headers[header_key]
+                    result["headers_present"][header_info["label"]] = value
+                    result["header_values"][header_key] = value
+                    result["score"] += header_info["weight"]
 
-    except requests.exceptions.RequestException as e:
-        result["error"] = str(e)
+                    # Validate HSTS specifics
+                    if header_key == "strict-transport-security":
+                        if "max-age=" in value.lower():
+                            try:
+                                max_age = int(value.lower().split("max-age=")[1].split(";")[0].strip())
+                                if max_age < 31536000:
+                                    result["issues"].append(
+                                        f"⚠️ HSTS max-age is {max_age}s — recommend at least 31536000 (1 year)"
+                                    )
+                            except (ValueError, IndexError):
+                                pass
+                        if "includesubdomains" not in value.lower():
+                            result["issues"].append("⚠️ HSTS missing includeSubDomains directive")
+                else:
+                    result["headers_missing"][header_info["label"]] = header_info["description"]
+                    result["recommendations"].append(
+                        f"{header_info['label']}: {header_info['recommendation']}"
+                    )
+
+            # Cap score at 100
+            result["score"] = min(result["score"], 100)
+
+            # Summary issues
+            missing_count = len(result["headers_missing"])
+            if missing_count > 3:
+                result["issues"].append(f"🔴 {missing_count} security headers missing — poor security posture")
+            elif missing_count > 0:
+                result["issues"].append(f"⚠️ {missing_count} security header(s) missing")
+
+            break
+
+        except requests.exceptions.Timeout:
+            if attempt < max_retries - 1:
+                print(f"  [security_headers] Timeout. Retrying...", file=sys.stderr)
+                time.sleep(2)
+                continue
+            result["error"] = "Request timed out"
+            return result
+        except requests.exceptions.RequestException as e:
+            result["error"] = str(e)
+            return result
 
     return result
 

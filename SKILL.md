@@ -54,7 +54,7 @@ Read `resources/references/mece-framework.md` for the complete category definiti
 │  └── 9. Local SEO (10%*)              ├── 8. AI Crawler Access (10%)│
 │      * if applicable                   └── 10. Platform Opt. (5%)│
 │                                                                 │
-│  PERFORMANCE (embedded in Technical)                            │
+│  PERFORMANCE (CWV) — Separate 10% SEO weight, 0% GEO                 │
 │  └── Core Web Vitals (SEO:10% / GEO:0%)                        │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -66,29 +66,29 @@ Read `resources/references/mece-framework.md` for the complete category definiti
 
 ### SEO Score (Traditional Search)
 
-| # | Category | Weight | Focus |
-|---|----------|--------|-------|
-| 1 | Technical Infrastructure | 25% | Crawlability, security, performance, CWV |
-| 2 | On-Page Optimization | 20% | Title, meta, headings, images, internal links |
-| 3 | Content Quality | 15% | E-E-A-T, depth, readability, freshness |
-| 4 | Structured Data | 15% | Schema validation, rich result eligibility |
-| 5 | Performance (CWV) | 10% | LCP, INP, CLS |
-| 6 | Social Signals | 5% | Open Graph, Twitter Card |
-| 7 | Local SEO | 10% | If applicable (0% if not local business) |
-| | **Total** | **100%** | |
+| # | Cat# | Category | Weight | Focus |
+|---|------|----------|--------|-------|
+| 1 | 1 | Technical Infrastructure | 25% | Crawlability, security, performance, CWV |
+| 2 | 4 | On-Page Optimization | 20% | Title, meta, headings, images, internal links |
+| 3 | 2 | Content Quality | 15% | E-E-A-T, depth, readability, freshness |
+| 4 | 3 | Structured Data | 15% | Schema validation, rich result eligibility |
+| 5 | 1 | Performance (CWV) | 10% | LCP, INP, CLS |
+| 6 | 5 | Social Signals | 5% | Open Graph, Twitter Card |
+| 7 | 9 | Local SEO | 10% | If applicable (0% if not local business) |
+| | | **Total** | **100%** | |
 
 ### GEO Score (AI Search Visibility)
 
-| # | Category | Weight | Focus |
-|---|----------|--------|-------|
-| 1 | AI Citability | 25% | Quotable passages, statistics, direct answers |
-| 2 | Brand Authority | 20% | Wikipedia, reviews, Reddit, YouTube, press |
-| 3 | Technical Infrastructure | 15% | SSR, crawlability, security |
-| 4 | Content Quality | 15% | E-E-A-T, depth, original insights |
-| 5 | AI Crawler Access | 10% | robots.txt AI rules, llms.txt, meta AI tags |
-| 6 | Structured Data | 10% | Entity linking, sameAs, FAQPage, speakable |
-| 7 | Platform Optimization | 5% | AIO, ChatGPT, Perplexity, Gemini, Copilot |
-| | **Total** | **100%** | |
+| # | Cat# | Category | Weight | Focus |
+|---|------|----------|--------|-------|
+| 1 | 6 | AI Citability | 25% | Quotable passages, statistics, direct answers |
+| 2 | 7 | Brand Authority | 20% | Wikipedia, reviews, Reddit, YouTube, press |
+| 3 | 1 | Technical Infrastructure | 15% | SSR, crawlability, security |
+| 4 | 2 | Content Quality | 15% | E-E-A-T, depth, original insights |
+| 5 | 8 | AI Crawler Access | 10% | robots.txt AI rules, llms.txt, meta AI tags |
+| 6 | 3 | Structured Data | 10% | Entity linking, sameAs, FAQPage, speakable |
+| 7 | 10 | Platform Optimization | 5% | AIO, ChatGPT, Perplexity, Gemini, Copilot |
+| | | **Total** | **100%** | |
 
 ---
 
@@ -113,8 +113,17 @@ read_url_content(url) → returns parsed HTML content
 ```
 
 **Script-backed verification** (recommended when execution is available):
+
+First, set the SKILL_DIR variable to the absolute path of this skill directory:
 ```bash
-SKILL_DIR="<absolute_path_to_this_skill_directory>"
+# Example: Set SKILL_DIR to your installation path
+SKILL_DIR="/Users/username/.claude/skills/sgeo"
+# Or if installed in a custom location:
+SKILL_DIR="/path/to/seo-geo-master-check"
+```
+
+Then run the audit scripts:
+```bash
 
 # Phase 1: Fetch and parse
 python3 $SKILL_DIR/scripts/fetch_page.py <url> --output /tmp/page.html

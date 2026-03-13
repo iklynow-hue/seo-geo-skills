@@ -32,6 +32,11 @@ except ImportError:
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; SEOSkill/1.0)"}
 
+# Performance optimization: Create a session for connection pooling
+# Reuses TCP connections across multiple requests for better performance
+SESSION = requests.Session()
+SESSION.headers.update(HEADERS)
+
 
 def extract_internal_links(html: str, page_url: str, domain: str) -> list:
     """Extract internal links from HTML."""
@@ -115,13 +120,16 @@ def crawl_site(start_url: str, max_depth: int = 2, max_pages: int = 50,
     pages_linking_to = defaultdict(set)  # url -> set of pages linking to it
     pages_found_at_depth = defaultdict(list)
 
+    # Performance optimization: Use session for connection pooling
+    session = SESSION
+
     def fetch_page(url):
         try:
-            resp = requests.get(url, timeout=timeout, headers=HEADERS, allow_redirects=True)
+            resp = session.get(url, timeout=timeout, allow_redirects=True)
             if resp.status_code == 200 and "text/html" in resp.headers.get("content-type", ""):
                 return resp.text, resp.url
-        except requests.exceptions.RequestException:
-            pass
+        except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as e:
+            print(f"Warning: Failed to fetch {url}: {e}", file=sys.stderr)
         return None, url
 
     while queue and len(visited) < max_pages:
@@ -162,6 +170,11 @@ def crawl_site(start_url: str, max_depth: int = 2, max_pages: int = 50,
                     # Add to crawl queue
                     if link["url"] not in visited and depth + 1 <= max_depth:
                         queue.append((link["url"], depth + 1))
+
+        # Progress indicator
+        if len(visited) % 5 == 0 or len(visited) >= max_pages:
+            progress_pct = int((len(visited) / max_pages) * 100)
+            print(f"Crawling progress: {len(visited)}/{max_pages} pages ({progress_pct}%)...", file=sys.stderr)
 
     result["pages_crawled"] = len(visited)
     result["total_internal_links"] = len(all_links)

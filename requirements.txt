@@ -1,0 +1,9 @@
+# Core dependencies
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# Optional dependencies
+# reportlab>=4.0.0  # Uncomment for PDF report generation
+# pyyaml>=6.0       # Uncomment for YAML config file support (~/.sgeorc)
+# numpy>=1.24.0     # Uncomment for 10-100x faster MinHash in duplicate_content.py

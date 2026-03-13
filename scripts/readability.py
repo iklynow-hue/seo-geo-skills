@@ -16,7 +16,7 @@ import argparse
 import json
 import re
 import sys
-import urllib.request
+import requests
 
 try:
     from bs4 import BeautifulSoup
@@ -330,17 +330,19 @@ def main():
         text = args.text
     elif args.url:
         try:
-            req = urllib.request.Request(
+            resp = requests.get(
                 args.url,
+                timeout=20,
                 headers={"User-Agent": "Mozilla/5.0 (compatible; SEOBot/1.0)"},
             )
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                content = resp.read().decode("utf-8", errors="ignore")
+            resp.raise_for_status()
+            content = resp.text
             if "<html" in content.lower() or "<body" in content.lower():
                 text = extract_text(content)
             else:
                 text = content
-        except Exception as exc:
+        except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as exc:
+            print(f"Error: Failed to fetch URL: {exc}", file=sys.stderr)
             parser.error(f"Failed to fetch URL: {exc}")
             return
     elif args.file:

@@ -19,17 +19,33 @@ def extract_platform_scores(results):
         "Bing Copilot": 0,
     }
 
-    # Try to get from brand_scanner.py output
+    # brand_scanner.py outputs a "platforms" dict with keys like
+    # "youtube", "reddit", "wikipedia", "linkedin", "other".
+    # Each value is a dict with presence booleans and metadata.
+    # We estimate an overall brand-authority score from those and
+    # distribute it across AI platforms as a proxy.
     brand_result = results.get("brand_scanner.py", {})
-    if "platforms" in brand_result:
-        brand_platforms = brand_result["platforms"]
-        for platform_name in platforms.keys():
-            if platform_name in brand_platforms:
-                # Estimate score based on presence data
-                platform_data = brand_platforms[platform_name]
-                if isinstance(platform_data, dict):
-                    presence_count = len([v for v in platform_data.values() if v])
-                    platforms[platform_name] = min(100, presence_count * 20)
+    brand_platforms = brand_result.get("platforms", {})
+
+    if brand_platforms:
+        presence_signals = 0
+        total_checks = 0
+        for _key, platform_data in brand_platforms.items():
+            if isinstance(platform_data, dict):
+                for v in platform_data.values():
+                    if isinstance(v, bool):
+                        total_checks += 1
+                        if v:
+                            presence_signals += 1
+
+        if total_checks > 0:
+            brand_score = min(100, int((presence_signals / total_checks) * 100))
+        else:
+            brand_score = 0
+
+        if brand_score > 0:
+            for platform in platforms:
+                platforms[platform] = brand_score
 
     # If no data, use GEO score as baseline
     if all(score == 0 for score in platforms.values()):
@@ -46,25 +62,27 @@ def extract_crawler_access(results):
     crawler_access = {}
 
     robots_result = results.get("robots_checker.py", {})
-    if "ai_crawlers" in robots_result:
-        crawlers = robots_result["ai_crawlers"]
+    # robots_checker.py outputs "ai_crawler_status" (not "ai_crawlers").
+    # Values are status strings like "fully blocked", "not managed (allowed by default)", etc.
+    ai_crawler_status = robots_result.get("ai_crawler_status", {})
 
-        crawler_mapping = {
-            "GPTBot": "ChatGPT",
-            "ClaudeBot": "Claude",
-            "PerplexityBot": "Perplexity",
-            "Google-Extended": "Gemini",
-            "Bingbot": "Bing Copilot",
-        }
+    crawler_mapping = {
+        "GPTBot": "ChatGPT",
+        "ClaudeBot": "Claude",
+        "PerplexityBot": "Perplexity",
+        "Google-Extended": "Gemini",
+        "Bingbot": "Bing Copilot",
+    }
 
-        for crawler_name, platform in crawler_mapping.items():
-            if crawler_name in crawlers:
-                status = crawlers[crawler_name]
-                crawler_access[crawler_name] = {
-                    "platform": platform,
-                    "status": "Allowed" if status else "Blocked",
-                    "recommendation": "Keep allowed" if status else "Unblock for AI visibility"
-                }
+    for crawler_name, platform in crawler_mapping.items():
+        if crawler_name in ai_crawler_status:
+            status_str = ai_crawler_status[crawler_name]
+            is_blocked = "blocked" in status_str.lower()
+            crawler_access[crawler_name] = {
+                "platform": platform,
+                "status": "Blocked" if is_blocked else "Allowed",
+                "recommendation": "Unblock for AI visibility" if is_blocked else "Keep allowed"
+            }
 
     return crawler_access
 

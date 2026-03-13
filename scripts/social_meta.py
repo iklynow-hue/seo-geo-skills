@@ -13,6 +13,7 @@ Usage:
 import argparse
 import json
 import sys
+import time
 from urllib.parse import urlparse
 
 try:
@@ -83,16 +84,38 @@ def check_social_meta(url: str, timeout: int = 15) -> dict:
         "error": None,
     }
 
-    try:
-        resp = requests.get(url, timeout=timeout, headers=HEADERS)
-        if resp.status_code != 200:
-            result["error"] = f"HTTP {resp.status_code}"
-            return result
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            resp = requests.get(url, timeout=timeout, headers=HEADERS)
 
-        soup = BeautifulSoup(resp.text, "html.parser")
-    except requests.exceptions.RequestException as e:
-        result["error"] = str(e)
-        return result
+            if resp.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 3
+                    print(f"  [social_meta] Rate limited. Retrying in {wait_time}s...", file=sys.stderr)
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    result["error"] = "Rate limited. Wait a few minutes and try again."
+                    return result
+
+            if resp.status_code != 200:
+                result["error"] = f"HTTP {resp.status_code}"
+                return result
+
+            soup = BeautifulSoup(resp.text, "html.parser")
+            break
+
+        except requests.exceptions.Timeout:
+            if attempt < max_retries - 1:
+                print(f"  [social_meta] Timeout. Retrying...", file=sys.stderr)
+                time.sleep(2)
+                continue
+            result["error"] = "Request timed out"
+            return result
+        except requests.exceptions.RequestException as e:
+            result["error"] = str(e)
+            return result
 
     total_checks = 0
     passed_checks = 0

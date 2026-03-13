@@ -21,6 +21,15 @@ except ImportError:
     print("ERROR: Required packages not installed. Run: pip install requests beautifulsoup4")
     sys.exit(1)
 
+def _get_parser():
+    """Return the best available HTML parser."""
+    try:
+        import lxml  # noqa: F401
+        return "lxml"
+    except ImportError:
+        return "html.parser"
+
+
 DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -51,6 +60,7 @@ def validate_llmstxt(url: str) -> dict:
             "url": llms_full_url,
             "exists": False,
         },
+        "error": None,
     }
 
     # Check llms.txt
@@ -113,7 +123,8 @@ def validate_llmstxt(url: str) -> dict:
 
         else:
             result["issues"].append(f"llms.txt returned status {response.status_code}")
-    except Exception as e:
+    except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as e:
+        result["error"] = f"Failed to fetch llms.txt: {str(e)}"
         result["issues"].append(f"Error fetching llms.txt: {str(e)}")
 
     # Check llms-full.txt
@@ -121,8 +132,8 @@ def validate_llmstxt(url: str) -> dict:
         response = requests.get(llms_full_url, headers=DEFAULT_HEADERS, timeout=15)
         if response.status_code == 200:
             result["full_version"]["exists"] = True
-    except Exception:
-        pass
+    except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as e:
+        print(f"Warning: Failed to fetch llms-full.txt: {e}", file=sys.stderr)
 
     return result
 
@@ -142,8 +153,8 @@ def generate_llmstxt(url: str, max_pages: int = 30) -> dict:
     # Fetch homepage
     try:
         response = requests.get(url, headers=DEFAULT_HEADERS, timeout=30)
-        soup = BeautifulSoup(response.text, "lxml")
-    except Exception as e:
+        soup = BeautifulSoup(response.text, _get_parser())
+    except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as e:
         result["error"] = f"Failed to fetch homepage: {str(e)}"
         return result
 
@@ -245,14 +256,15 @@ def generate_llmstxt(url: str, max_pages: int = 30) -> dict:
                 # Try to fetch page description
                 try:
                     page_resp = requests.get(page["url"], headers=DEFAULT_HEADERS, timeout=10)
-                    page_soup = BeautifulSoup(page_resp.text, "lxml")
+                    page_soup = BeautifulSoup(page_resp.text, _get_parser())
                     page_meta = page_soup.find("meta", attrs={"name": "description"})
                     page_desc = page_meta.get("content", "") if page_meta else ""
                     if page_desc:
                         full_lines.append(f"- [{page['title']}]({page['url']}): {page_desc}")
                     else:
                         full_lines.append(f"- [{page['title']}]({page['url']})")
-                except Exception:
+                except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as e:
+                    print(f"Warning: Failed to fetch {page['url']}: {e}", file=sys.stderr)
                     full_lines.append(f"- [{page['title']}]({page['url']})")
             full_lines.append("")
 

@@ -14,6 +14,7 @@ import argparse
 import json
 import re
 import sys
+import time
 
 try:
     import requests
@@ -67,30 +68,64 @@ def check_llms_txt(url: str, timeout: int = 15) -> dict:
     headers = {"User-Agent": "Mozilla/5.0 (compatible; SEOSkill/1.0)"}
 
     # Check llms.txt
-    try:
-        resp = requests.get(f"{base}/llms.txt", timeout=timeout, headers=headers)
-        result["status"] = resp.status_code
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            resp = requests.get(f"{base}/llms.txt", timeout=timeout, headers=headers)
 
-        if resp.status_code == 200:
-            result["exists"] = True
-            result["content"] = resp.text
-            _parse_llms_txt(resp.text, result)
-            _score_quality(result)
-        elif resp.status_code == 404:
-            result["quality"]["issues"].append("🔴 No llms.txt found")
-            result["quality"]["suggestions"].append(
-                "Create /llms.txt with site name, description, and key page links"
-            )
-    except requests.exceptions.RequestException as e:
-        result["error"] = str(e)
+            if resp.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 3
+                    print(f"  [llms_txt_checker] Rate limited. Retrying in {wait_time}s...", file=sys.stderr)
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    result["error"] = "Rate limited. Wait a few minutes and try again."
+                    return result
+
+            result["status"] = resp.status_code
+
+            if resp.status_code == 200:
+                result["exists"] = True
+                result["content"] = resp.text
+                _parse_llms_txt(resp.text, result)
+                _score_quality(result)
+            elif resp.status_code == 404:
+                result["quality"]["issues"].append("🔴 No llms.txt found")
+                result["quality"]["suggestions"].append(
+                    "Create /llms.txt with site name, description, and key page links"
+                )
+            break
+
+        except requests.exceptions.Timeout:
+            if attempt < max_retries - 1:
+                print(f"  [llms_txt_checker] Timeout. Retrying...", file=sys.stderr)
+                time.sleep(2)
+                continue
+            result["error"] = "Request timed out"
+            return result
+        except requests.exceptions.RequestException as e:
+            result["error"] = str(e)
+            return result
 
     # Check llms-full.txt (optional extended version)
-    try:
-        resp = requests.get(f"{base}/llms-full.txt", timeout=timeout, headers=headers)
-        result["full_status"] = resp.status_code
-        result["full_exists"] = resp.status_code == 200
-    except requests.exceptions.RequestException:
-        pass
+    for attempt in range(max_retries):
+        try:
+            resp = requests.get(f"{base}/llms-full.txt", timeout=timeout, headers=headers)
+
+            if resp.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 3
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    break
+
+            result["full_status"] = resp.status_code
+            result["full_exists"] = resp.status_code == 200
+            break
+        except requests.exceptions.RequestException:
+            break
 
     return result
 

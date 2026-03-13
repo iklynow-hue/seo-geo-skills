@@ -33,7 +33,7 @@
 
 ## Internal Linking
 
-- Minimum 3 internal links per page
+- Minimum 5 internal links per page
 - No orphan pages (≤1 incoming link)
 - Descriptive anchor text (not "click here")
 - No more than 100 links per page

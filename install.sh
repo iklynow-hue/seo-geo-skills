@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_NAME="sgeo"
 CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
-REQUIREMENTS="requests beautifulsoup4 lxml"
+REQUIREMENTS=(requests beautifulsoup4 lxml)
 
 # Colors
 RED='\033[0;31m'
@@ -20,6 +20,8 @@ info()  { echo -e "${BLUE}[INFO]${NC} $*"; }
 ok()    { echo -e "${GREEN}[OK]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 fail()  { echo -e "${RED}[FAIL]${NC} $*"; exit 1; }
+
+[ -z "$HOME" ] && fail "HOME is not set"
 
 echo ""
 echo "╔══════════════════════════════════════════════╗"
@@ -38,9 +40,9 @@ else
     fail "Python 3.8+ is required. Install from https://python.org"
 fi
 
-PY_VERSION=$($PY -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-PY_MAJOR=$($PY -c 'import sys; print(sys.version_info.major)')
-PY_MINOR=$($PY -c 'import sys; print(sys.version_info.minor)')
+PY_VERSION=$("$PY" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+PY_MAJOR=$("$PY" -c 'import sys; print(sys.version_info.major)')
+PY_MINOR=$("$PY" -c 'import sys; print(sys.version_info.minor)')
 
 if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 8 ]; }; then
     fail "Python 3.8+ required. Found: $PY_VERSION"
@@ -49,19 +51,19 @@ ok "Python $PY_VERSION found"
 
 # --- 2. Check pip ---
 info "Checking pip..."
-if ! $PY -m pip --version &>/dev/null; then
+if ! "$PY" -m pip --version &>/dev/null; then
     warn "pip not found. Attempting to install..."
-    $PY -m ensurepip --default-pip 2>/dev/null || fail "Cannot install pip. Install manually."
+    "$PY" -m ensurepip --default-pip 2>/dev/null || fail "Cannot install pip. Install manually."
 fi
 ok "pip available"
 
 # --- 3. Install Python dependencies ---
 info "Installing Python dependencies..."
-$PY -m pip install --quiet --upgrade $REQUIREMENTS
-ok "Dependencies installed: $REQUIREMENTS"
+"$PY" -m pip install --quiet --upgrade "${REQUIREMENTS[@]}" || fail "pip install failed"
+ok "Dependencies installed: ${REQUIREMENTS[*]}"
 
 # --- 4. Optional: Playwright ---
-if $PY -c "import playwright" 2>/dev/null; then
+if "$PY" -c "import playwright" 2>/dev/null; then
     ok "Playwright already installed (optional)"
 else
     warn "Playwright not installed (optional — needed for screenshots)"

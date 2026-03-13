@@ -25,8 +25,8 @@ import json
 import re
 import sys
 import time
-import urllib.request
-import urllib.parse
+import requests
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse, urljoin
 
 try:
@@ -101,13 +101,14 @@ USER_AGENT = "Mozilla/5.0 (compatible; SEOSkill-hreflang/1.0)"
 # Fetch helpers
 # ---------------------------------------------------------------------------
 
-def fetch_html(url: str, timeout: int = 10) -> tuple[str, str]:
+def fetch_html(url: str, timeout: int = 10) -> Tuple[str, str]:
     """Return (html, final_url) after fetching. Returns ('', url) on error."""
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read().decode("utf-8", errors="ignore"), resp.url
-    except Exception as exc:
+        resp = requests.get(url, timeout=timeout, headers={"User-Agent": USER_AGENT})
+        resp.raise_for_status()
+        return resp.text, resp.url
+    except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as e:
+        print(f"Warning: Failed to fetch {url}: {e}", file=sys.stderr)
         return "", url
 
 
@@ -122,7 +123,7 @@ def fetch_robots_txt(base_url: str) -> str:
 # Hreflang tag extraction
 # ---------------------------------------------------------------------------
 
-def extract_hreflang_from_html(soup: BeautifulSoup, page_url: str) -> list[dict]:
+def extract_hreflang_from_html(soup: BeautifulSoup, page_url: str) -> List[Dict]:
     """
     Extract hreflang tags from <link rel="alternate" hreflang="..."> in <head>.
     Returns list of {lang, url, raw_lang, raw_url}.
@@ -144,31 +145,30 @@ def extract_hreflang_from_html(soup: BeautifulSoup, page_url: str) -> list[dict]
     return tags
 
 
-def extract_hreflang_from_http_headers(url: str) -> list[dict]:
+def extract_hreflang_from_http_headers(url: str) -> List[Dict]:
     """Check HTTP Link headers for hreflang (used for non-HTML files)."""
     tags = []
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT}, method="HEAD")
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            link_header = resp.headers.get("Link", "")
-            if not link_header:
-                return []
-            # Parse: <url>; rel="alternate"; hreflang="lang"
-            for part in link_header.split(","):
-                part = part.strip()
-                url_match = re.search(r'<([^>]+)>', part)
-                hreflang_match = re.search(r'hreflang="([^"]+)"', part)
-                rel_match = re.search(r'rel="([^"]+)"', part)
-                if url_match and hreflang_match and rel_match and "alternate" in rel_match.group(1):
-                    tags.append({
-                        "lang": hreflang_match.group(1).lower(),
-                        "raw_lang": hreflang_match.group(1),
-                        "url": url_match.group(1),
-                        "raw_url": url_match.group(1),
-                        "source": "http_header",
-                    })
-    except Exception:
-        pass
+        resp = requests.head(url, timeout=8, headers={"User-Agent": USER_AGENT})
+        link_header = resp.headers.get("Link", "")
+        if not link_header:
+            return []
+        # Parse: <url>; rel="alternate"; hreflang="lang"
+        for part in link_header.split(","):
+            part = part.strip()
+            url_match = re.search(r'<([^>]+)>', part)
+            hreflang_match = re.search(r'hreflang="([^"]+)"', part)
+            rel_match = re.search(r'rel="([^"]+)"', part)
+            if url_match and hreflang_match and rel_match and "alternate" in rel_match.group(1):
+                tags.append({
+                    "lang": hreflang_match.group(1).lower(),
+                    "raw_lang": hreflang_match.group(1),
+                    "url": url_match.group(1),
+                    "raw_url": url_match.group(1),
+                    "source": "http_header",
+                })
+    except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as e:
+        print(f"Warning: Failed to check HTTP headers for {url}: {e}", file=sys.stderr)
     return tags
 
 
@@ -247,7 +247,7 @@ def validate_lang_code(lang_tag: str) -> dict:
     }
 
 
-def check_self_reference(tags: list[dict], page_url: str) -> dict:
+def check_self_reference(tags: List[Dict], page_url: str) -> Dict:
     """Check 1: Self-referencing tag must be present and URL must match canonical."""
     normalized_page = page_url.rstrip("/")
     for tag in tags:
@@ -263,7 +263,7 @@ def check_self_reference(tags: list[dict], page_url: str) -> dict:
     }
 
 
-def check_x_default(tags: list[dict]) -> dict:
+def check_x_default(tags: List[Dict]) -> Dict:
     """Check 3: x-default tag presence."""
     x_defaults = [t for t in tags if t["lang"] == "x-default"]
     if not x_defaults:
@@ -283,7 +283,7 @@ def check_x_default(tags: list[dict]) -> dict:
     return {"passed": True, "detail": f"x-default present → {x_defaults[0]['url']}"}
 
 
-def check_protocol_consistency(tags: list[dict]) -> dict:
+def check_protocol_consistency(tags: List[Dict]) -> Dict:
     """Check 7: All URLs in the hreflang set must use the same protocol."""
     protocols = {urlparse(t["url"]).scheme for t in tags if t["url"]}
     if len(protocols) > 1:
@@ -296,7 +296,7 @@ def check_protocol_consistency(tags: list[dict]) -> dict:
     return {"passed": True, "detail": f"All hreflang URLs use: {list(protocols)[0] if protocols else 'unknown'}"}
 
 
-def check_lang_codes(tags: list[dict]) -> list[dict]:
+def check_lang_codes(tags: List[Dict]) -> List[Dict]:
     """Checks 4 & 5: Validate each language/region code."""
     issues = []
     for tag in tags:
@@ -317,11 +317,11 @@ def check_lang_codes(tags: list[dict]) -> list[dict]:
 
 
 def check_return_tags(
-    tags: list[dict],
+    tags: List[Dict],
     page_url: str,
     verify_remote: bool = False,
     timeout: int = 8,
-) -> list[dict]:
+) -> List[Dict]:
     """
     Check 2: Bidirectional return tags.
     If verify_remote=True, fetches each alternate URL and checks for a reciprocal tag.
@@ -386,7 +386,7 @@ def check_return_tags(
     return issues
 
 
-def check_canonical_alignment(soup: BeautifulSoup, tags: list[dict], page_url: str) -> dict:
+def check_canonical_alignment(soup: BeautifulSoup, tags: List[Dict], page_url: str) -> Dict:
     """
     Check 6: Hreflang tags should only appear on canonical URLs.
     Warns if a canonical tag points elsewhere, invalidating the hreflang set.

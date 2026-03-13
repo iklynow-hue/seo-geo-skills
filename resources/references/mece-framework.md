@@ -153,7 +153,7 @@ This framework produces TWO independent scores:
   - **GEO Priority:** SoftwareApplication, Person, FAQPage (AI entity recognition)
 
 - **5.3 Entity Linking**
-  - **SEO Focus:** sameAs links (1-2 sufficient)
+  - **SEO Focus:** sameAs links (≥2 required)
   - **GEO Focus:** sameAs links (5+ required for entity graph)
 
 - **5.4 Schema Quality**

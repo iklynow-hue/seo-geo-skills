@@ -4,6 +4,8 @@
 $ErrorActionPreference = "Stop"
 
 $SkillName = "sgeo"
+function Write-Fail  { param($msg) Write-Host "[FAIL] $msg" -ForegroundColor Red; exit 1 }
+if (-not $env:USERPROFILE) { Write-Fail "USERPROFILE environment variable is not set." }
 $ClaudeSkillsDir = Join-Path $env:USERPROFILE ".claude\skills"
 $LinkPath = Join-Path $ClaudeSkillsDir $SkillName
 

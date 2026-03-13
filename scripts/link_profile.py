@@ -20,7 +20,7 @@ import json
 import re
 import sys
 import time
-import urllib.request
+import requests
 from collections import Counter, defaultdict
 from urllib.parse import urlparse, urljoin
 
@@ -34,26 +34,33 @@ except ImportError:
 
 USER_AGENT = "Mozilla/5.0 (compatible; SEOSkill-LinkProfile/1.0)"
 
+# Performance optimization: Create a session for connection pooling
+# Reuses TCP connections across multiple requests for better performance
+SESSION = requests.Session()
+SESSION.headers.update({"User-Agent": USER_AGENT})
+
 
 # ---------------------------------------------------------------------------
 # Fetch helpers
 # ---------------------------------------------------------------------------
 
-def fetch_page(url: str, timeout: int = 10) -> tuple:
+def fetch_page(url: str, session: requests.Session, timeout: int = 10) -> tuple:
     """Return (final_url, html) or (url, '')."""
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.url, resp.read().decode("utf-8", errors="ignore")
-    except Exception:
+        # Performance optimization: Use session for connection pooling
+        resp = session.get(url, timeout=timeout)
+        resp.raise_for_status()
+        return resp.url, resp.text
+    except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as e:
+        print(f"Warning: Failed to fetch {url}: {e}", file=sys.stderr)
         return url, ""
 
 
-def get_sitemap_urls(site_url: str, limit: int = 200) -> list:
+def get_sitemap_urls(site_url: str, session: requests.Session, limit: int = 200) -> list:
     """Extract URLs from sitemap.xml."""
     parsed = urlparse(site_url)
     sitemap_url = f"{parsed.scheme}://{parsed.netloc}/sitemap.xml"
-    _, body = fetch_page(sitemap_url)
+    _, body = fetch_page(sitemap_url, session)
     if not body:
         return []
     urls = re.findall(r"<loc>([^<]+)</loc>", body)
@@ -62,7 +69,7 @@ def get_sitemap_urls(site_url: str, limit: int = 200) -> list:
         expanded = []
         for sub in urls[:10]:
             time.sleep(0.3)
-            _, sub_body = fetch_page(sub)
+            _, sub_body = fetch_page(sub, session)
             if sub_body:
                 expanded.extend(re.findall(r"<loc>([^<]+)</loc>", sub_body))
         urls = expanded
@@ -112,8 +119,11 @@ def crawl_site(site_url: str, max_pages: int = 50) -> dict:
     parsed = urlparse(site_url)
     base_domain = parsed.netloc
 
+    # Performance optimization: Use session for all requests
+    session = SESSION
+
     # Seed URLs from sitemap + homepage
-    seed_urls = get_sitemap_urls(site_url, limit=max_pages)
+    seed_urls = get_sitemap_urls(site_url, session, limit=max_pages)
     if site_url not in seed_urls:
         seed_urls.insert(0, site_url)
     seed_urls = seed_urls[:max_pages]
@@ -127,13 +137,14 @@ def crawl_site(site_url: str, max_pages: int = 50) -> dict:
     }
 
     crawled = set()
-    for url in seed_urls:
+    total_urls = len(seed_urls)
+    for idx, url in enumerate(seed_urls, 1):
         if url in crawled:
             continue
         crawled.add(url)
 
         time.sleep(0.3)
-        final_url, html = fetch_page(url)
+        final_url, html = fetch_page(url, session)
         if not html:
             continue
 
@@ -152,6 +163,11 @@ def crawl_site(site_url: str, max_pages: int = 50) -> dict:
 
         for link in links["external"]:
             graph["all_external_targets"][link["url"]] += 1
+
+        # Progress indicator
+        if idx % 5 == 0 or idx == total_urls:
+            progress_pct = int((idx / total_urls) * 100)
+            print(f"Crawling progress: {idx}/{total_urls} pages ({progress_pct}%)...", file=sys.stderr)
 
     return graph, crawled, base_domain
 
@@ -254,6 +270,7 @@ def analyze_link_profile(graph: dict, crawled: set, base_domain: str) -> dict:
             for domain, count in external_domains.most_common(15)
         ],
         "issues": issues,
+        "error": None,
     }
 
 

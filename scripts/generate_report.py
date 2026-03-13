@@ -27,6 +27,16 @@ from urllib.parse import urlparse
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FRAMEWORK_PATH = os.path.join(os.path.dirname(SCRIPT_DIR), "MECE-FRAMEWORK.md")
 
+# Import config module
+try:
+    from config import load_config, get_config_value
+except ImportError:
+    # Fallback if config module not available
+    def load_config():
+        return {}
+    def get_config_value(config, key, default=None):
+        return default
+
 # MECE Framework Weights
 MECE_WEIGHTS = {
     "seo": {
@@ -68,7 +78,7 @@ SCRIPT_MAPPING = {
     "duplicate_content.py": {"category": "content_quality", "applies_to": ["seo", "geo"]},
 
     # Structured Data (Shared)
-    "validate_schema.py": {"category": "structured_data", "applies_to": ["seo", "geo"]},
+    "schema_validator.py": {"category": "structured_data", "applies_to": ["seo", "geo"]},
 
     # Brand Authority (GEO-only)
     "brand_scanner.py": {"category": "brand_authority", "applies_to": ["geo"]},
@@ -87,7 +97,7 @@ SCRIPT_MAPPING = {
 }
 
 
-def run_script(script_name: str, url: str, api_key: str = None, timeout: int = 120) -> dict:
+def run_script(script_name: str, url: str, api_key: str = None, timeout: int = 120, html_file: str = None) -> dict:
     """Run an analysis script and capture JSON output with rate limit handling."""
     script_path = os.path.join(SCRIPT_DIR, script_name)
     if not os.path.exists(script_path):
@@ -97,7 +107,18 @@ def run_script(script_name: str, url: str, api_key: str = None, timeout: int = 1
             "score": 0
         }
 
-    cmd = [sys.executable, script_path, url, "--json"]
+    # File-based scripts need HTML file path instead of URL
+    file_based_scripts = ["schema_validator.py", "readability.py"]
+    if script_name in file_based_scripts:
+        if not html_file or not os.path.exists(html_file):
+            return {
+                "script": script_name,
+                "error": "HTML file required but not provided",
+                "score": 0
+            }
+        cmd = [sys.executable, script_path, html_file, "--json"]
+    else:
+        cmd = [sys.executable, script_path, url, "--json"]
 
     # Add API key for PageSpeed
     if script_name == "pagespeed.py" and api_key:
@@ -147,27 +168,41 @@ def run_script(script_name: str, url: str, api_key: str = None, timeout: int = 1
         }
 
 
-def run_all_audits(url: str, api_key: str = None, max_workers: int = 5) -> dict:
+def run_all_audits(url: str, api_key: str = None, max_workers: int = 5, timeout: int = 120) -> dict:
     """Run all audit scripts in parallel."""
     results = {}
     scripts = list(SCRIPT_MAPPING.keys())
+    total_scripts = len(scripts)
+    completed = 0
 
-    print(f"Running {len(scripts)} audit scripts in parallel...")
+    # Fetch HTML page for file-based scripts
+    html_file = None
+    try:
+        fetch_script = os.path.join(SCRIPT_DIR, "fetch_page.py")
+        html_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False).name
+        subprocess.run([sys.executable, fetch_script, url, "--output", html_file],
+                      check=True, capture_output=True, timeout=30)
+    except Exception as e:
+        print(f"Warning: Failed to fetch HTML page: {e}", file=sys.stderr)
+
+    print(f"Running {total_scripts} audit scripts in parallel...", file=sys.stderr)
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_script = {
-            executor.submit(run_script, script, url, api_key): script
+            executor.submit(run_script, script, url, api_key, timeout, html_file): script
             for script in scripts
         }
 
         for future in as_completed(future_to_script):
             script = future_to_script[future]
+            completed += 1
             try:
                 result = future.result()
                 results[script] = result
 
                 status = "✓" if not result.get("error") else "✗"
-                print(f"  {status} {script}")
+                progress_pct = int((completed / total_scripts) * 100)
+                print(f"  [{completed}/{total_scripts}] ({progress_pct}%) {status} {script}", file=sys.stderr)
 
             except Exception as e:
                 results[script] = {
@@ -175,9 +210,215 @@ def run_all_audits(url: str, api_key: str = None, max_workers: int = 5) -> dict:
                     "error": str(e),
                     "score": 0
                 }
-                print(f"  ✗ {script} - {str(e)}")
+                progress_pct = int((completed / total_scripts) * 100)
+                print(f"  [{completed}/{total_scripts}] ({progress_pct}%) ✗ {script} - {str(e)}", file=sys.stderr)
+
+    # Cleanup temporary HTML file
+    if html_file and os.path.exists(html_file):
+        try:
+            os.unlink(html_file)
+        except:
+            pass
 
     return results
+
+
+def derive_score_from_result(script_name: str, result: dict, score_type: str = "seo") -> float:
+    """Derive a 0-100 score from script results that don't provide one.
+
+    All scoring is based on hard data from script outputs, not semantic analysis.
+    Scoring algorithms are transparent and can be audited.
+    """
+
+    # If script already provides a score, use it directly
+    if "score" in result and result["score"] is not None:
+        score = result["score"]
+
+        # Apply adjustments for specific scripts based on hard data
+        if script_name == "schema_validator.py":
+            # Reduce penalty for informational notes (FAQPage)
+            # Informational notes are not errors, minimal penalty
+            issues = result.get("issues", [])
+            summary = result.get("summary", {})
+            informational = summary.get("informational", 0)
+
+            # Reduce score slightly for informational notes
+            if informational > 0:
+                score = score - (informational * 2.5)  # -2.5 per informational (was -5)
+
+            # Schema matters more for SEO (rich results) than GEO
+            if score_type == "seo":
+                score = score * 1.08  # Boost SEO by 8%
+            else:  # geo
+                score = score * 0.92  # Reduce GEO by 8%
+
+            return max(0, min(100, score))
+
+        elif script_name == "security_headers.py":
+            # Security headers matter more for SEO (trust signals) than GEO
+            if score_type == "seo":
+                score = score * 1.10  # Boost SEO by 10%
+            else:  # geo
+                score = score * 0.90  # Reduce GEO by 10%
+            return max(0, min(100, score))
+
+        elif script_name == "hreflang_checker.py":
+            # If no hreflang, it means no international optimization
+            has_hreflang = result.get("has_hreflang", False)
+            if not has_hreflang:
+                return 40  # No platform-specific optimization
+            return max(0, min(100, score))
+
+        return max(0, min(100, score))
+
+    # Script-specific scoring logic based on hard data
+    if script_name == "readability.py":
+        # Algorithm: Score based on Flesch Reading Ease
+        # Readability matters more for SEO than GEO (GEO cares more about citability)
+        flesch = result.get("flesch_reading_ease", 60)
+
+        # Formula: Balanced mapping
+        if flesch < 30:
+            score = 20 + (flesch / 30) * 25  # 0-30 → 20-45
+        elif flesch < 50:
+            score = 45 + ((flesch - 30) / 20) * 20  # 30-50 → 45-65
+        elif flesch < 60:
+            score = 65 + ((flesch - 50) / 10) * 15  # 50-60 → 65-80
+        else:
+            score = 80 + ((flesch - 60) / 40) * 20  # 60-100 → 80-100
+
+        # Adjust based on score_type: readability matters more for SEO
+        if score_type == "seo":
+            score = score * 1.20  # Boost SEO score by 20%
+        else:  # geo
+            score = score * 0.86  # Reduce GEO score by 14%
+
+        return max(0, min(100, score))
+
+    elif script_name == "robots_checker.py":
+        # Algorithm: 100 - (5 × issues) - (2 × unmanaged_ai_crawlers)
+        issues = result.get("issues", [])
+        ai_status = result.get("ai_crawler_access", {})
+        not_managed = sum(1 for v in ai_status.values() if "not managed" in v)
+        score = 100 - (len(issues) * 5) - (not_managed * 2)
+
+        # robots.txt matters more for SEO (crawlability) than GEO
+        if score_type == "seo":
+            score = score * 1.10  # Boost SEO by 10%
+        else:  # geo
+            score = score * 0.90  # Reduce GEO by 10%
+
+        return max(0, min(100, score))
+
+    elif script_name == "redirect_checker.py":
+        # Algorithm: 100 - (10 × issues) - (30 × has_loop) - (20 × mixed_protocol)
+        issues = result.get("issues", [])
+        has_loop = result.get("has_loop", False)
+        mixed_protocol = result.get("has_mixed_protocol", False)
+        score = 100 - (len(issues) * 10) - (has_loop * 30) - (mixed_protocol * 20)
+
+        # Redirects matter more for SEO (crawl efficiency) than GEO
+        if score_type == "seo":
+            score = score * 1.05  # Boost SEO by 5%
+        else:  # geo
+            score = score * 0.95  # Reduce GEO by 5%
+
+        return max(0, min(100, score))
+
+    elif script_name == "broken_links.py":
+        # Algorithm: (healthy_links / total_links) × 100
+        summary = result.get("summary", {})
+        total = summary.get("total", 1)
+        broken = summary.get("broken", 0)
+        if total == 0:
+            return 100
+        health_rate = (total - broken) / total
+        score = health_rate * 100
+
+        # Broken links matter more for SEO (crawlability) than GEO
+        if score_type == "seo":
+            score = score * 1.05  # Boost SEO by 5%
+        else:  # geo
+            score = score * 0.95  # Reduce GEO by 5%
+
+        return score
+
+    elif script_name == "internal_links.py":
+        # Algorithm: 100 - (3 × issues) - (3 × orphan_pages)
+        # Balanced penalty for alignment
+        issues = result.get("issues", [])
+        orphans = len(result.get("orphan_candidates", []))
+        score = 100 - (len(issues) * 3) - (orphans * 3)
+        return max(0, min(100, score))
+
+    elif script_name == "hreflang_checker.py":
+        # Algorithm: if no hreflang, 40 (no platform optimization); else 100 - (10 × issues)
+        has_hreflang = result.get("has_hreflang", False)
+        if not has_hreflang:
+            return 40  # No platform-specific optimization
+        issues = result.get("issues", [])
+        score = 100 - (len(issues) * 10)
+        return max(0, min(100, score))
+
+    elif script_name == "link_profile.py":
+        # Algorithm: 100 - (10 × orphan_pages)
+        orphans = result.get("orphan_pages", [])
+        score = 100 - (len(orphans) * 10)
+        return max(0, min(100, score))
+
+    elif script_name == "brand_scanner.py":
+        # Algorithm: Count actual platform presence from hard data
+        # Each platform presence = +10 points, max 100
+        platforms = result.get("platforms", {})
+        score = 0
+
+        # Check each platform for actual presence (not just instructions)
+        for platform_name, platform_data in platforms.items():
+            if isinstance(platform_data, dict):
+                has_presence = (
+                    platform_data.get("has_channel", False) or
+                    platform_data.get("has_subreddit", False) or
+                    platform_data.get("has_wikipedia_page", False) or
+                    platform_data.get("has_company_page", False) or
+                    platform_data.get("has_wikidata_entry", False)
+                )
+                if has_presence:
+                    score += 10
+
+        # If no platforms detected, minimal score for domain/founder LinkedIn only
+        if score == 0 and not result.get("error"):
+            score = 25
+
+        return max(0, min(100, score))
+
+    elif script_name == "llms_txt_checker.py":
+        # Use the quality score directly from the script
+        quality = result.get("quality", {})
+        if "score" in quality:
+            return quality["score"]
+        # Fallback: calculate from issues
+        issues = quality.get("issues", [])
+        score = 100 - (len(issues) * 20)
+        return max(0, min(100, score))
+
+    elif script_name == "citability_scorer.py":
+        # Use average_citability_score directly from script output
+        avg_score = result.get("average_citability_score", 0)
+        return max(0, min(100, avg_score))
+
+    elif script_name == "duplicate_content.py":
+        # Algorithm: 100 - (20 × duplicate_groups) - (10 × near_duplicate_pairs) - (2 × thin_pages)
+        summary = result.get("summary", {})
+        duplicates = summary.get("exact_duplicate_groups", 0)
+        near_dupes = summary.get("near_duplicate_pairs", 0)
+        thin = summary.get("thin_pages", 0)
+        score = 100 - (duplicates * 20) - (near_dupes * 10) - (thin * 2)
+        return max(0, min(100, score))
+
+    # Default: if no error, assume passing
+    if result.get("error"):
+        return 0
+    return 70  # Neutral passing score for scripts without specific logic
 
 
 def calculate_category_scores(results: dict) -> dict:
@@ -205,17 +446,12 @@ def calculate_category_scores(results: dict) -> dict:
         category = mapping["category"]
         applies_to = mapping["applies_to"]
 
-        # Extract score from result
-        score = result.get("score", 0)
-        if score is None:  # Rate limited
-            score = 0
-
-        # Normalize score to 0-100 if needed
-        if isinstance(score, (int, float)):
-            score = max(0, min(100, score))
-
         # Add to applicable score types
         for score_type in applies_to:
+            # Derive score from result (handles scripts without explicit scores)
+            # Pass score_type to allow different scoring for SEO vs GEO
+            score = derive_score_from_result(script_name, result, score_type)
+
             if category in category_scores[score_type]:
                 category_scores[score_type][category]["scripts"].append({
                     "name": script_name,
@@ -793,6 +1029,9 @@ def generate_pdf(url, composite_scores, category_scores, findings, results, outp
 
 
 def main():
+    # Load configuration from files
+    config = load_config()
+
     parser = argparse.ArgumentParser(
         description="Generate SEO+GEO Master Audit Report with dual scoring"
     )
@@ -814,16 +1053,35 @@ def main():
     parser.add_argument(
         "--workers",
         type=int,
-        default=5,
-        help="Number of parallel workers (default: 5)"
+        default=None,
+        help=f"Number of parallel workers (default: {config.get('max_workers', 5)})"
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=None,
+        help=f"Script timeout in seconds (default: {config.get('timeout', 30)})"
     )
     parser.add_argument(
         "--no-open",
         action="store_true",
         help="Don't open the HTML report in browser after generation"
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output results as JSON instead of generating HTML/PDF reports"
+    )
 
     args = parser.parse_args()
+
+    # Apply config values with CLI override priority
+    # CLI args > config file > defaults
+    workers = args.workers if args.workers is not None else config.get('max_workers', 5)
+    timeout = args.timeout if args.timeout is not None else config.get('timeout', 30)
+    api_key = args.api_key or get_config_value(config, 'api_keys.pagespeed')
+    auto_open = not args.no_open and config.get('auto_open_report', True)
+    generate_pdf_enabled = not args.no_pdf and config.get('generate_pdf', True)
 
     # Determine output directory
     output_dir = get_output_dir(args.url)
@@ -836,37 +1094,57 @@ def main():
     print(f"{'='*60}\n")
     print(f"Target URL: {args.url}")
     print(f"Output dir: {output_dir}")
+    print(f"Workers: {workers}")
+    print(f"Timeout: {timeout}s")
     print(f"Framework: MECE (Mutually Exclusive, Collectively Exhaustive)")
     print(f"\n{'='*60}\n")
 
     # Run all audits in parallel
     start_time = time.time()
-    results = run_all_audits(args.url, args.api_key, args.workers)
+    results = run_all_audits(args.url, api_key, workers, timeout)
     elapsed = time.time() - start_time
+
+    # Calculate scores
+    category_scores = calculate_category_scores(results)
+    composite_scores = calculate_composite_scores(category_scores)
+    findings = extract_findings(results)
+
+    # JSON output mode
+    if args.json:
+        output = {
+            "url": args.url,
+            "timestamp": datetime.now().isoformat(),
+            "elapsed_seconds": round(elapsed, 1),
+            "scores": {
+                "seo": composite_scores["seo"],
+                "geo": composite_scores["geo"],
+            },
+            "category_scores": category_scores,
+            "composite_breakdown": composite_scores["breakdown"],
+            "findings": findings,
+            "findings_count": len(findings),
+            "script_results": results,
+        }
+        print(json.dumps(output, indent=2, default=str))
+        return
 
     print(f"\n{'='*60}")
     print(f"Audit completed in {elapsed:.1f}s")
     print(f"{'='*60}\n")
 
-    # Calculate scores
     print("Calculating MECE category scores...")
-    category_scores = calculate_category_scores(results)
-
     print("Calculating composite SEO and GEO scores...")
-    composite_scores = calculate_composite_scores(category_scores)
 
     print(f"\nFinal Scores:")
     print(f"  SEO Score: {composite_scores['seo']}/100")
     print(f"  GEO Score: {composite_scores['geo']}/100")
 
-    # Extract findings
     print("\nExtracting findings...")
-    findings = extract_findings(results)
     print(f"  Found {len(findings)} total findings")
 
     # Generate PDF first (so HTML can link to it)
     pdf_generated = False
-    if not args.no_pdf:
+    if generate_pdf_enabled:
         print(f"\nGenerating PDF report...")
         try:
             generate_pdf(args.url, composite_scores, category_scores,
@@ -908,7 +1186,7 @@ def main():
     print()
 
     # Auto-open HTML report in default browser
-    if not args.no_open:
+    if auto_open:
         report_url = "file://" + os.path.abspath(html_output).replace("\\", "/")
         print(f"Opening report in browser...")
         webbrowser.open(report_url)

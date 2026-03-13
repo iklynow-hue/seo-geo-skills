@@ -255,7 +255,8 @@ def analyze_page_citability(url: str) -> dict:
             timeout=30,
         )
         response.raise_for_status()
-    except Exception as e:
+    except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as e:
+        print(f"Warning: Failed to fetch {url}: {e}", file=sys.stderr)
         return {"error": f"Failed to fetch page: {str(e)}"}
 
     soup = BeautifulSoup(response.text, "lxml")

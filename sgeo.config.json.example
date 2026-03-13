@@ -1,0 +1,16 @@
+{
+  "_comment": "SGEO Configuration File (JSON format)",
+  "_usage": "Copy this file to sgeo.config.json in the project root to use project-specific config",
+
+  "timeout": 30,
+  "max_workers": 10,
+  "user_agent": "SGEO-Audit-Bot/1.0 (SEO+GEO Analysis)",
+
+  "api_keys": {
+    "pagespeed": null
+  },
+
+  "output_dir": "outputs/",
+  "auto_open_report": true,
+  "generate_pdf": true
+}
