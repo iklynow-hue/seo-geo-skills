@@ -93,10 +93,11 @@ Recommended setup sequence:
    `Choose PageSpeed handling:`
    `1. Best-effort without key (recommended)`
    `2. Skip PageSpeed`
-   `3. I want to provide a PageSpeed API key`
+   `3. Prompt me securely in the terminal for the API key`
+   `4. I will paste the API key in chat`
 
-   If the user chooses `3`, ask one follow-up before continuing:
-   `Reply with your API key in the next message, or say "wrapper prompt" if you want to run the terminal wrapper with a secure key prompt.`
+   If the user chooses `4`, ask one follow-up before continuing:
+   `Reply with your API key in the next message.`
 
 4. **HTML artifact**
    Ask:
@@ -118,9 +119,17 @@ If the agent fails to ask these questions on its own, the user should explicitly
 
 `Ask me the setup questions one by one with numbered options for scope, output style, PageSpeed handling, and HTML output before you begin.`
 
-### 2. Prefer the wrapper for full audits
+### 2. Use the wrapper for all normal audits
 
-Use the wrapper command for normal audits because it keeps the crawl, PageSpeed output, manifest, and optional HTML summary together.
+Use the wrapper command for all normal audits. This is the default execution path.
+
+Do not run the lower-level crawl and PageSpeed scripts directly during a standard audit unless you are debugging the skill itself.
+
+Why the wrapper is required:
+
+- it keeps the crawl, PageSpeed output, manifest, and optional HTML summary together
+- it supports secure terminal prompting for the PageSpeed key
+- it gives one consistent execution path for Codex, Claude, and terminal usage
 
 Template audit with optional HTML:
 
@@ -153,7 +162,7 @@ If the user does not want PageSpeed:
   --skip-pagespeed
 ```
 
-Use the lower-level scripts directly only when you need custom orchestration or debugging.
+If the user pastes an API key in chat, still use the wrapper and pass that key to it with `--api-key`.
 
 ### 3. Handle PageSpeed key expectations explicitly
 
@@ -165,9 +174,10 @@ The PageSpeed script uses the official PageSpeed Insights API.
 
 So in chat flows:
 
-- if the user already has an env key, continue normally
+- if the user already has an env key, continue normally through the wrapper
 - if they want a prompted key, use the wrapper command with `--prompt-pagespeed-key`
-- if they do not want to manage a key, continue best-effort and label performance evidence as partial when needed
+- if they paste a key in chat, still execute through the wrapper with `--api-key`
+- if they do not want to manage a key, continue best-effort or skip and label performance evidence accordingly
 
 ### 4. Review the generated artifacts
 

@@ -69,9 +69,10 @@ Expected flow:
 3. PageSpeed
    `1. Best-effort without key (recommended)`
    `2. Skip PageSpeed`
-   `3. I want to provide a PageSpeed API key`
+   `3. Prompt me securely in the terminal for the API key`
+   `4. I will paste the API key in chat`
 
-   If you choose `3`, the agent should ask you to paste the key in the next message, or let you choose the terminal wrapper prompt flow.
+   If you choose `4`, the agent should ask you to paste the key in the next message.
 
 4. HTML artifact
    `1. Off (recommended)`
@@ -86,6 +87,10 @@ Use $seo-geo-site-audit to audit https://mcmarkets.com. Ask me the setup questio
 That prompt is the safest starting point in fresh sessions.
 
 ## Wrapper Command
+
+The wrapper is the required execution path for normal audits.
+
+Even when you use the skill from chat, the agent should ultimately run the wrapper rather than stitching together the lower-level scripts manually.
 
 For terminal use, run the wrapper directly:
 
