@@ -41,8 +41,8 @@ def build_output_dir(url: str, out_dir: str | None) -> Path:
     return path
 
 
-def run_command(cmd: list[str]) -> None:
-    subprocess.run(cmd, check=True)
+def run_command(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, check=check, text=True, capture_output=True)
 
 
 def read_json(path: Path) -> dict:
@@ -415,7 +415,11 @@ def main() -> int:
         "--out",
         str(crawl_path),
     ]
-    run_command(crawl_cmd)
+    crawl_result = run_command(crawl_cmd)
+    if crawl_result.stdout:
+        print(crawl_result.stdout, end="")
+    if crawl_result.stderr:
+        print(crawl_result.stderr, file=sys.stderr, end="")
 
     if args.skip_pagespeed:
         pagespeed_path_out: Path | None = None
@@ -434,7 +438,23 @@ def main() -> int:
             pagespeed_cmd.extend(["--api-key", args.api_key])
         if args.prompt_pagespeed_key:
             pagespeed_cmd.append("--prompt-api-key")
-        run_command(pagespeed_cmd)
+        pagespeed_result = run_command(pagespeed_cmd, check=False)
+        if pagespeed_result.stdout:
+            print(pagespeed_result.stdout, end="")
+        if pagespeed_result.stderr:
+            print(pagespeed_result.stderr, file=sys.stderr, end="")
+        if pagespeed_result.returncode != 0 and not pagespeed_path.exists():
+            raise subprocess.CalledProcessError(
+                pagespeed_result.returncode,
+                pagespeed_cmd,
+                output=pagespeed_result.stdout,
+                stderr=pagespeed_result.stderr,
+            )
+        if pagespeed_result.returncode != 0 and pagespeed_path.exists():
+            print(
+                "PageSpeed completed with partial or failed requests. Continuing with the saved PageSpeed JSON.",
+                file=sys.stderr,
+            )
         pagespeed_path_out = pagespeed_path
 
     if html_report_path:

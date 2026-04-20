@@ -73,10 +73,17 @@ def canonicalize_url(url: str) -> str:
     return urllib.parse.urlunsplit(normalized)
 
 
+def normalize_host(host: str) -> str:
+    host = host.lower()
+    if host.startswith("www."):
+        return host[4:]
+    return host
+
+
 def same_origin(a: str, b: str) -> bool:
     pa = urllib.parse.urlsplit(a)
     pb = urllib.parse.urlsplit(b)
-    return (pa.scheme.lower(), pa.netloc.lower()) == (pb.scheme.lower(), pb.netloc.lower())
+    return (pa.scheme.lower(), normalize_host(pa.netloc)) == (pb.scheme.lower(), normalize_host(pb.netloc))
 
 
 def looks_like_html_url(url: str) -> bool:
@@ -92,7 +99,7 @@ def classify_url(url: str, homepage: str) -> str:
     parsed = urllib.parse.urlsplit(url)
     homepage_parsed = urllib.parse.urlsplit(homepage)
     path = parsed.path.lower().strip("/")
-    if parsed.netloc.lower() != homepage_parsed.netloc.lower():
+    if normalize_host(parsed.netloc) != normalize_host(homepage_parsed.netloc):
         return "external"
     if not path:
         return "homepage"

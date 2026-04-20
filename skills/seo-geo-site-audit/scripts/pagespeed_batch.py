@@ -5,13 +5,19 @@ import argparse
 import getpass
 import json
 import os
+import socket
 import sys
+import time
 import urllib.parse
+import urllib.error
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
 
 API_ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
+REQUEST_TIMEOUT = 20
+MAX_ATTEMPTS = 2
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 def resolve_api_key(args: argparse.Namespace) -> str | None:
@@ -26,7 +32,7 @@ def resolve_api_key(args: argparse.Namespace) -> str | None:
     return None
 
 
-def call_pagespeed(url: str, strategy: str, api_key: str | None) -> dict:
+def call_pagespeed(url: str, strategy: str, api_key: str | None, timeout: int = REQUEST_TIMEOUT) -> dict:
     params = [
         ("url", url),
         ("strategy", strategy),
@@ -39,9 +45,37 @@ def call_pagespeed(url: str, strategy: str, api_key: str | None) -> dict:
         params.append(("key", api_key))
     endpoint = f"{API_ENDPOINT}?{urllib.parse.urlencode(params, doseq=True)}"
     req = urllib.request.Request(endpoint, headers={"User-Agent": "seo-geo-site-audit/1.0"})
-    with urllib.request.urlopen(req, timeout=60) as response:
+    with urllib.request.urlopen(req, timeout=timeout) as response:
         raw = response.read().decode("utf-8", errors="replace")
     return json.loads(raw)
+
+
+def call_pagespeed_with_retry(url: str, strategy: str, api_key: str | None) -> dict:
+    last_error: Exception | None = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            return call_pagespeed(url, strategy, api_key)
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")[:300].strip()
+            retryable = exc.code in RETRYABLE_STATUS_CODES
+            message = f"HTTP Error {exc.code}"
+            if body:
+                message = f"{message}: {body}"
+            last_error = RuntimeError(message)
+            if not retryable or attempt == MAX_ATTEMPTS:
+                raise last_error
+        except (urllib.error.URLError, socket.timeout, TimeoutError) as exc:
+            last_error = exc
+            if attempt == MAX_ATTEMPTS:
+                raise
+        except Exception as exc:
+            last_error = exc
+            if attempt == MAX_ATTEMPTS:
+                raise
+        time.sleep(min(2 ** (attempt - 1), 4))
+    if last_error:
+        raise last_error
+    raise RuntimeError("PageSpeed request failed without a captured error.")
 
 
 def pick_urls_from_crawl(crawl_path: str, max_urls: int) -> list[str]:
@@ -177,7 +211,7 @@ def main() -> int:
     for url in urls:
         for strategy in ("mobile", "desktop"):
             try:
-                payload = call_pagespeed(url, strategy, api_key)
+                payload = call_pagespeed_with_retry(url, strategy, api_key)
                 results.append(summarize_result(payload, url, strategy))
             except Exception as exc:
                 errors.append({"url": url, "strategy": strategy, "error": f"{type(exc).__name__}: {exc}"})
@@ -185,6 +219,8 @@ def main() -> int:
     output = {
         "tested_urls": urls,
         "api_key_used": bool(api_key),
+        "page_speed_endpoint": API_ENDPOINT,
+        "attempts_per_request": MAX_ATTEMPTS,
         "results": results,
         "aggregate": aggregate(results),
         "errors": errors,
