@@ -66,6 +66,44 @@ Confirm:
   existing env key, one-off prompted key, best-effort without key, or skip
 - whether they want an optional HTML artifact
 
+Ask these questions **one by one**, not as a single block. Wait for the user's answer to each question before asking the next one.
+
+Use numbered choices so the user can answer with `1`, `2`, or `3`.
+
+Recommended setup sequence:
+
+1. **Scope**
+   Ask:
+   `Choose the audit scope:`
+   `1. Fast check (1 page)`
+   `2. Template audit (10 pages)`
+   `3. Template audit (25 pages, recommended)`
+   `4. Full site audit (50 pages)`
+   `5. Deep investigation (100 pages)`
+
+2. **Output style**
+   Ask:
+   `Choose the output style:`
+   `1. Operator (recommended)`
+   `2. Boss`
+   `3. Specialist`
+
+3. **PageSpeed**
+   Ask:
+   `Choose PageSpeed handling:`
+   `1. Best-effort without key (recommended)`
+   `2. Skip PageSpeed`
+   `3. I want to provide a PageSpeed API key`
+
+   If the user chooses `3`, ask one follow-up before continuing:
+   `Reply with your API key in the next message, or say "wrapper prompt" if you want to run the terminal wrapper with a secure key prompt.`
+
+4. **HTML artifact**
+   Ask:
+   `Do you want the optional HTML artifact?`
+   `1. Off (recommended)`
+   `2. On`
+
 Recommended defaults you may suggest:
 
 - **Template audit**
@@ -78,7 +116,7 @@ Do not start the crawl until the user confirms the setup or explicitly says to u
 
 If the agent fails to ask these questions on its own, the user should explicitly say:
 
-`Ask me to confirm crawl size, output style, PageSpeed handling, and whether I want HTML output before you begin.`
+`Ask me the setup questions one by one with numbered options for scope, output style, PageSpeed handling, and HTML output before you begin.`
 
 ### 2. Prefer the wrapper for full audits
 

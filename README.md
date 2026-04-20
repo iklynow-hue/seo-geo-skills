@@ -50,12 +50,37 @@ The skill is designed to ask you to confirm:
 - PageSpeed handling
 - whether you want HTML output
 
-If the agent follows the skill well, it should ask those questions before crawling.
+If the agent follows the skill well, it should ask those questions **one by one** before crawling, with numbered choices.
+
+Expected flow:
+
+1. Scope
+   `1. Fast check (1 page)`
+   `2. Template audit (10 pages)`
+   `3. Template audit (25 pages, recommended)`
+   `4. Full site audit (50 pages)`
+   `5. Deep investigation (100 pages)`
+
+2. Output style
+   `1. Operator (recommended)`
+   `2. Boss`
+   `3. Specialist`
+
+3. PageSpeed
+   `1. Best-effort without key (recommended)`
+   `2. Skip PageSpeed`
+   `3. I want to provide a PageSpeed API key`
+
+   If you choose `3`, the agent should ask you to paste the key in the next message, or let you choose the terminal wrapper prompt flow.
+
+4. HTML artifact
+   `1. Off (recommended)`
+   `2. On`
 
 If it does not ask, say this explicitly:
 
 ```text
-Use $seo-geo-site-audit to audit https://mcmarkets.com. Ask me to confirm crawl size, output style, PageSpeed handling, and whether I want HTML output before you begin.
+Use $seo-geo-site-audit to audit https://mcmarkets.com. Ask me the setup questions one by one with numbered options for scope, output style, PageSpeed handling, and HTML output before you begin.
 ```
 
 That prompt is the safest starting point in fresh sessions.
