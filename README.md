@@ -1,10 +1,10 @@
-# SEO/GEO Skills
+# SEO GEO Site Audit Skill
 
-This repo now includes a portable sampled site-audit skill for Codex and similar agents:
+This repo is now focused on one skill only:
 
-- `skills/seo-geo-site-audit/` — recommended skill for public-site SEO + GEO audits
+- `skills/seo-geo-site-audit/`
 
-The legacy SGEO toolkit still remains in the repo root, but if you want the cleaner audit flow with setup questions, optional HTML output, and capped crawl sampling, start with `seo-geo-site-audit`.
+Use it for sampled SEO + GEO audits of public sites, with optional PageSpeed coverage and an optional HTML audit artifact.
 
 ## Install
 
@@ -15,47 +15,52 @@ git clone https://github.com/iklynow-hue/seo-geo-skills
 cd seo-geo-skills
 ```
 
-Install the portable skill by placing it in your global skills folder. Example using `~/.agents/skills`:
+Link the skill into your global skills folder:
 
 ```bash
 mkdir -p ~/.agents/skills
 ln -s "$PWD/skills/seo-geo-site-audit" ~/.agents/skills/seo-geo-site-audit
 ```
 
-If you already have a local copy there, replace the existing folder or update the symlink target.
+If you already have an older local copy, replace it or update the symlink target.
 
-If you want the older SGEO root skill instead, the existing installer still works:
-
-```bash
-bash install.sh
-```
-
-## Use Cases
+## When To Use It
 
 Use `seo-geo-site-audit` when you want:
 
-- a sampled SEO audit for a public site
-- a GEO or AI-visibility review
-- a template audit that checks structure across key page types
-- an operator-style report with passed items, issues, evidence, and actions
-- optional PageSpeed coverage and an optional HTML artifact
+- a sampled site audit instead of a full crawl
+- SEO + GEO analysis in one pass
+- a template-based review across key page types
+- a scored audit with passed items, issues, evidence, and actions
+- optional PageSpeed data
+- optional HTML output for the artifact bundle
 
-## Run It
+## How To Use It
 
-In Codex or Claude, the recommended prompts are:
+In Codex or Claude, start with:
 
 ```text
 Use $seo-geo-site-audit to audit https://mcmarkets.com
-Audit https://mcmarkets.com for SEO and GEO readiness. Ask me to confirm the setup first.
-Run an Operator-mode audit for https://mcmarkets.com and ask whether I want HTML output.
 ```
 
-The skill should pause first and confirm:
+The skill is designed to ask you to confirm:
 
 - crawl mode and page cap
 - output style
 - PageSpeed handling
-- whether you want the optional HTML artifact
+- whether you want HTML output
+
+If the agent follows the skill well, it should ask those questions before crawling.
+
+If it does not ask, say this explicitly:
+
+```text
+Use $seo-geo-site-audit to audit https://mcmarkets.com. Ask me to confirm crawl size, output style, PageSpeed handling, and whether I want HTML output before you begin.
+```
+
+That prompt is the safest starting point in fresh sessions.
+
+## Wrapper Command
 
 For terminal use, run the wrapper directly:
 
@@ -68,39 +73,38 @@ For terminal use, run the wrapper directly:
   --html-report
 ```
 
-This writes the audit artifacts into one output folder under `/tmp` by default:
+Useful options:
+
+- `--mode fast|template|full|deep`
+- `--max-pages N`
+- `--output-style boss|operator|specialist`
+- `--prompt-pagespeed-key`
+- `--api-key YOUR_KEY`
+- `--skip-pagespeed`
+- `--html-report`
+- `--out-dir /path/to/output`
+
+Artifacts written by the wrapper:
 
 - `crawl.json`
-- `pagespeed.json`
+- `pagespeed.json` unless skipped
 - `audit-run.json`
 - `audit-summary.html` when `--html-report` is enabled
 
 ## PageSpeed API Key
 
-The skill can use Google PageSpeed Insights in three ways:
-
-1. environment variable
-2. one-off terminal prompt
-3. best-effort without a key
-
-Environment variables:
+The skill can use Google PageSpeed Insights by:
 
 - `PAGESPEED_API_KEY`
 - `GOOGLE_API_KEY`
+- a one-off terminal prompt via `--prompt-pagespeed-key`
+- best-effort mode without a key
 
-If you want a secure terminal prompt for the key, use:
-
-```bash
-~/.agents/skills/seo-geo-site-audit/scripts/audit-site \
-  https://mcmarkets.com \
-  --prompt-pagespeed-key
-```
-
-If no key is available, the audit can still continue, but the performance section should be treated as partial evidence if Google rate-limits or skips requests.
+If no key is available, the audit can still continue, but the performance section may be partial if Google rate-limits requests.
 
 ## How To Read The Scores
 
-The audit produces seven weighted section scores:
+The audit uses seven weighted sections:
 
 | Section | Weight |
 |---|---:|
@@ -112,7 +116,7 @@ The audit produces seven weighted section scores:
 | Entity & Structured Data | 10 |
 | Performance & Page Experience | 10 |
 
-Overall score interpretation:
+Interpretation:
 
 | Score | Meaning |
 |---|---|
@@ -122,22 +126,9 @@ Overall score interpretation:
 | 40-59 | Weak foundation |
 | 0-39 | Critical blockers |
 
-Important reading notes:
+Read the results with these guardrails:
 
-- the crawl is sample-based, not a full-site crawl
-- recurring sitewide issues matter more than isolated one-off issues
-- confidence depends on how many pages were sampled and how complete the PageSpeed coverage was
-- if PageSpeed ran without a key or partially failed, read the performance score with lower confidence
-
-## Repo Layout
-
-- `skills/seo-geo-site-audit/` — current portable skill
-- `SKILL.md`, `scripts/`, `resources/` in the repo root — legacy SGEO toolkit
-
-## Recommended Starting Prompt
-
-If you want to test the installed skill in a fresh Codex session, use:
-
-```text
-Use $seo-geo-site-audit to audit https://mcmarkets.com. Ask me to confirm the crawl setup before you begin.
-```
+- it is a sample, not a full-site crawl
+- repeated sitewide issues matter more than isolated one-offs
+- lower crawl coverage means lower confidence
+- incomplete PageSpeed coverage means lower confidence in the performance section

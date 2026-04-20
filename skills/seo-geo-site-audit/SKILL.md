@@ -76,6 +76,10 @@ Recommended defaults you may suggest:
 
 Do not start the crawl until the user confirms the setup or explicitly says to use the defaults.
 
+If the agent fails to ask these questions on its own, the user should explicitly say:
+
+`Ask me to confirm crawl size, output style, PageSpeed handling, and whether I want HTML output before you begin.`
+
 ### 2. Prefer the wrapper for full audits
 
 Use the wrapper command for normal audits because it keeps the crawl, PageSpeed output, manifest, and optional HTML summary together.
