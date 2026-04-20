@@ -1,0 +1,4 @@
+interface:
+  display_name: "SEO GEO Site Audit"
+  short_description: "Audit websites for SEO, GEO, EEAT, and PageSpeed"
+  default_prompt: "Use $seo-geo-site-audit to audit a public website with a capped crawl sample, scored SEO/GEO sections, and mobile/desktop PageSpeed conclusions."
