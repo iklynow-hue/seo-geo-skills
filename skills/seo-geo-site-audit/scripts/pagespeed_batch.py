@@ -15,9 +15,10 @@ from collections import defaultdict
 from pathlib import Path
 
 API_ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
-REQUEST_TIMEOUT = 20
-MAX_ATTEMPTS = 2
+REQUEST_TIMEOUT = 45
+MAX_ATTEMPTS = 3
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+BACKOFF_BASE = 2  # seconds
 
 
 def resolve_api_key(args: argparse.Namespace) -> str | None:
@@ -72,7 +73,7 @@ def call_pagespeed_with_retry(url: str, strategy: str, api_key: str | None) -> d
             last_error = exc
             if attempt == MAX_ATTEMPTS:
                 raise
-        time.sleep(min(2 ** (attempt - 1), 4))
+        time.sleep(min(BACKOFF_BASE ** attempt, 8))
     if last_error:
         raise last_error
     raise RuntimeError("PageSpeed request failed without a captured error.")
@@ -103,7 +104,7 @@ def pick_urls_from_crawl(crawl_path: str, max_urls: int) -> list[str]:
     return chosen[:max_urls]
 
 
-def summarize_result(payload: dict, url: str, strategy: str) -> dict:
+def summarize_result(payload: dict, url: str, strategy: str, source: str = "api") -> dict:
     lighthouse = payload.get("lighthouseResult", {})
     categories = lighthouse.get("categories", {})
     audits = lighthouse.get("audits", {})
@@ -150,6 +151,7 @@ def summarize_result(payload: dict, url: str, strategy: str) -> dict:
     return {
         "url": url,
         "strategy": strategy,
+        "source": source,
         "category_scores": category_scores,
         "lab_metrics": lab_metrics,
         "field_data": loading.get("metrics", {}),
@@ -178,6 +180,81 @@ def aggregate(results: list[dict]) -> dict:
     return summary
 
 
+def summarize_local_lighthouse(lh_data: dict, url: str, strategy: str) -> dict:
+    """Parse local Lighthouse JSON output into the same schema as API results."""
+    categories = lh_data.get("categories", {})
+    audits = lh_data.get("audits", {})
+
+    category_scores = {
+        key.lower(): round((value.get("score") or 0) * 100)
+        for key, value in categories.items()
+    }
+
+    metric_map = {
+        "first-contentful-paint": "fcp_ms",
+        "largest-contentful-paint": "lcp_ms",
+        "speed-index": "speed_index_ms",
+        "interactive": "tti_ms",
+        "total-blocking-time": "tbt_ms",
+        "cumulative-layout-shift": "cls",
+        "interaction-to-next-paint": "inp_ms",
+    }
+    lab_metrics = {}
+    for audit_id, output_key in metric_map.items():
+        item = audits.get(audit_id, {})
+        if "numericValue" in item:
+            lab_metrics[output_key] = item["numericValue"]
+
+    opportunities = []
+    for audit_id, item in audits.items():
+        details_type = item.get("details", {}).get("type")
+        if details_type == "opportunity" or item.get("scoreDisplayMode") == "metricSavings":
+            score = item.get("score")
+            if score is None or score >= 0.9:
+                continue
+            opportunities.append(
+                {
+                    "id": audit_id,
+                    "title": item.get("title", audit_id),
+                    "score": score,
+                    "display_value": item.get("displayValue", ""),
+                }
+            )
+    opportunities.sort(key=lambda x: x["score"])
+
+    return {
+        "url": url,
+        "strategy": strategy,
+        "source": "local_lighthouse",
+        "category_scores": category_scores,
+        "lab_metrics": lab_metrics,
+        "field_data": {},
+        "origin_field_data": {},
+        "top_opportunities": opportunities[:8],
+        "final_url": lh_data.get("finalUrl", url),
+    }
+
+
+def run_local_lighthouse_fallback(url: str, strategy: str, timeout: int = 120) -> dict | None:
+    """Try to run Lighthouse locally via CDP as fallback when PageSpeed API fails."""
+    try:
+        from fetchers import run_local_lighthouse, is_lighthouse_available
+    except ImportError:
+        return None
+
+    if not is_lighthouse_available():
+        print(f"[pagespeed] Local Lighthouse not available for fallback", file=sys.stderr)
+        return None
+
+    print(f"[pagespeed] Attempting local Lighthouse for {url} ({strategy})...", file=sys.stderr)
+    lh_data = run_local_lighthouse(url, strategy=strategy, timeout=timeout)
+    if lh_data is None:
+        print(f"[pagespeed] Local Lighthouse failed for {url}", file=sys.stderr)
+        return None
+
+    return summarize_local_lighthouse(lh_data, url, strategy)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run PageSpeed Insights for a set of URLs.")
     parser.add_argument("--url", action="append", default=[], help="URL to test. May be supplied multiple times.")
@@ -188,6 +265,11 @@ def main() -> int:
         "--prompt-api-key",
         action="store_true",
         help="Prompt securely for a Google PageSpeed Insights API key if one is not already set.",
+    )
+    parser.add_argument(
+        "--local-lighthouse-fallback",
+        action="store_true",
+        help="Fall back to local Lighthouse via CDP when PageSpeed API fails.",
     )
     parser.add_argument("--out", help="Optional JSON output file.")
     args = parser.parse_args()
@@ -210,26 +292,39 @@ def main() -> int:
     errors = []
     for url in urls:
         for strategy in ("mobile", "desktop"):
+            api_success = False
             try:
                 payload = call_pagespeed_with_retry(url, strategy, api_key)
-                results.append(summarize_result(payload, url, strategy))
+                results.append(summarize_result(payload, url, strategy, source="api"))
+                api_success = True
             except Exception as exc:
-                errors.append({"url": url, "strategy": strategy, "error": f"{type(exc).__name__}: {exc}"})
+                errors.append({"url": url, "strategy": strategy, "error": f"{type(exc).__name__}: {exc}", "source": "api"})
+
+            # Try local Lighthouse fallback if API failed and flag is set
+            if not api_success and args.local_lighthouse_fallback:
+                try:
+                    lh_result = run_local_lighthouse_fallback(url, strategy)
+                    if lh_result is not None:
+                        results.append(lh_result)
+                        print(f"[pagespeed] Local Lighthouse succeeded for {url} ({strategy})", file=sys.stderr)
+                except Exception as lh_exc:
+                    errors.append({"url": url, "strategy": strategy, "error": f"Local Lighthouse: {type(lh_exc).__name__}: {lh_exc}", "source": "local_lighthouse"})
 
     output = {
         "tested_urls": urls,
         "api_key_used": bool(api_key),
+        "local_lighthouse_fallback": args.local_lighthouse_fallback,
         "page_speed_endpoint": API_ENDPOINT,
         "attempts_per_request": MAX_ATTEMPTS,
         "results": results,
         "aggregate": aggregate(results),
         "errors": errors,
     }
-    payload = json.dumps(output, ensure_ascii=False, indent=2)
+    payload_out = json.dumps(output, ensure_ascii=False, indent=2)
     if args.out:
-        Path(args.out).write_text(payload, encoding="utf-8")
+        Path(args.out).write_text(payload_out, encoding="utf-8")
     else:
-        print(payload)
+        print(payload_out)
     return 0 if results else 1
 
 

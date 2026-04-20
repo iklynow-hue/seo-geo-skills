@@ -17,8 +17,11 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
-DEFAULT_UA = "seo-geo-site-audit/1.0 (+https://example.invalid)"
-TIMEOUT = 15
+# Import unified fetcher
+from fetchers import fetch_rendered, detect_spa_shell, DEFAULT_UA as FETCHERS_UA
+
+DEFAULT_UA = FETCHERS_UA
+TIMEOUT = 30
 MAX_SITEMAPS = 20
 MAX_BODY_CHARS = 250000
 BINARY_EXTENSIONS = {
@@ -53,7 +56,7 @@ def now_iso() -> str:
 
 
 def clamp_max_pages(value: int) -> int:
-    return max(1, min(100, value))
+    return max(1, min(25, value))
 
 
 def canonicalize_url(url: str) -> str:
@@ -273,7 +276,25 @@ class PageParser(HTMLParser):
             self.price_hint = True
 
 
-def fetch(url: str, user_agent: str, timeout: int = TIMEOUT) -> dict:
+def fetch(url: str, user_agent: str, timeout: int = TIMEOUT, preferred_fetcher: str = "auto") -> dict:
+    """Fetch a URL using the unified fetcher (JS rendering when available).
+
+    For robots.txt and sitemaps, always uses urllib (no JS needed).
+    For page content, uses the preferred fetcher chain.
+    """
+    # For non-HTML resources (robots.txt, sitemaps), use urllib directly
+    parsed = urllib.parse.urlsplit(url)
+    path_lower = parsed.path.lower()
+    is_non_html = path_lower.endswith(("/robots.txt", ".xml")) or path_lower == "/robots.txt"
+
+    if is_non_html or preferred_fetcher == "urllib":
+        return _fetch_urllib_raw(url, user_agent, timeout)
+
+    return fetch_rendered(url, user_agent=user_agent, timeout=timeout, preferred_fetcher=preferred_fetcher)
+
+
+def _fetch_urllib_raw(url: str, user_agent: str, timeout: int = TIMEOUT) -> dict:
+    """Raw urllib fetch for non-HTML resources (robots.txt, sitemaps)."""
     request = urllib.request.Request(
         url,
         headers={
@@ -297,6 +318,7 @@ def fetch(url: str, user_agent: str, timeout: int = TIMEOUT) -> dict:
             "content_type": content_type,
             "text": text,
             "bytes": len(raw),
+            "fetcher": "urllib",
         }
 
 
@@ -459,8 +481,8 @@ def safe_join(base: str, href: str) -> str | None:
     return None
 
 
-def analyze_page(url: str, user_agent: str, start_url: str) -> tuple[dict, list[str]]:
-    response = fetch(url, user_agent)
+def analyze_page(url: str, user_agent: str, start_url: str, preferred_fetcher: str = "auto") -> tuple[dict, list[str]]:
+    response = fetch(url, user_agent, preferred_fetcher=preferred_fetcher)
     text = response["text"]
     parser = PageParser()
     parser.feed(text)
@@ -497,6 +519,7 @@ def analyze_page(url: str, user_agent: str, start_url: str) -> tuple[dict, list[
     robots_value = ", ".join(x for x in [meta_robots, x_robots] if x).strip(", ")
     initial_html_visible = bool(title and (len(words) >= 80 or parser.heading_counts["h1"] >= 1 and len(words) >= 50))
     excessive_script_ratio = parser.script_count >= 20 and len(words) < 150
+    spa_detection = detect_spa_shell(text, len(words), parser.script_count)
     og_coverage = {
         "title": bool(parser.og.get("og:title")),
         "description": bool(parser.og.get("og:description")),
@@ -564,6 +587,8 @@ def analyze_page(url: str, user_agent: str, start_url: str) -> tuple[dict, list[
             "body_text_in_initial_html": initial_html_visible,
             "excessive_script_ratio": excessive_script_ratio,
         },
+        "spa_detection": spa_detection,
+        "fetcher": response.get("fetcher", "urllib"),
         "issues_detected": issues,
     }
     return page, internal_links
@@ -604,6 +629,8 @@ def aggregate(pages: list[dict]) -> dict:
     pages_with_author = sum(1 for p in pages if p["has_author_hint"])
     pages_with_faq = sum(1 for p in pages if p["has_faq_hint"])
     pages_with_initial_html = sum(1 for p in pages if p["render_visibility"]["body_text_in_initial_html"])
+    pages_flagged_spa = sum(1 for p in pages if p.get("spa_detection", {}).get("needs_js_rendering", False))
+    fetcher_counts = Counter(p.get("fetcher", "unknown") for p in pages)
     return {
         "page_count": len(pages),
         "template_counts": dict(template_counts),
@@ -616,6 +643,8 @@ def aggregate(pages: list[dict]) -> dict:
         "pages_with_author_hints": pages_with_author,
         "pages_with_faq_hints": pages_with_faq,
         "pages_with_initial_html_content": pages_with_initial_html,
+        "pages_flagged_spa": pages_flagged_spa,
+        "fetcher_counts": dict(fetcher_counts),
         "coverage_rates": {
             "title": round(100 * sum(1 for p in pages if p["title"]) / totals, 1),
             "meta_description": round(100 * sum(1 for p in pages if p["meta_description"]) / totals, 1),
@@ -635,7 +664,8 @@ def build_site_signals(start_url: str, user_agent: str, robots_bundle: dict) -> 
     site_root = f"{parsed.scheme}://{parsed.netloc}"
     homepage_headers = {}
     try:
-        homepage = fetch(site_root, user_agent)
+        # Security headers must come from the raw HTTP response, not a rendered fetcher.
+        homepage = fetch(site_root, user_agent, preferred_fetcher="urllib")
         homepage_headers = {k.lower(): v for k, v in homepage["headers"].items()}
     except Exception:
         pass
@@ -661,7 +691,7 @@ def build_site_signals(start_url: str, user_agent: str, robots_bundle: dict) -> 
     }
 
 
-def crawl(start_url: str, max_pages: int, user_agent: str) -> dict:
+def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: str = "auto") -> dict:
     start_url = canonicalize_url(start_url)
     robots_bundle = discover_sitemap_urls(start_url, user_agent)
     sitemap_candidates = interleave_by_template(robots_bundle["urls"], start_url, max(max_pages * 2, max_pages))
@@ -678,7 +708,7 @@ def crawl(start_url: str, max_pages: int, user_agent: str) -> dict:
             continue
         seen.add(current)
         try:
-            page, discovered_links = analyze_page(current, user_agent, start_url)
+            page, discovered_links = analyze_page(current, user_agent, start_url, preferred_fetcher=preferred_fetcher)
         except urllib.error.HTTPError as exc:
             page = {
                 "url": current,
@@ -773,13 +803,15 @@ def crawl(start_url: str, max_pages: int, user_agent: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Crawl a capped sample of site pages and extract SEO/GEO signals.")
     parser.add_argument("--url", required=True, help="Start URL, usually the homepage.")
-    parser.add_argument("--max-pages", type=int, default=25, help="Maximum pages to sample (1-100).")
+    parser.add_argument("--max-pages", type=int, default=25, help="Maximum pages to sample (1-25).")
     parser.add_argument("--user-agent", default=DEFAULT_UA, help="HTTP User-Agent header.")
+    parser.add_argument("--fetcher", default="auto", choices=["auto", "scrapling", "lightpanda", "agent_browser", "urllib"],
+                        help="Preferred fetcher. 'auto' tries Scrapling → Lightpanda → agent-browser → urllib.")
     parser.add_argument("--out", help="Optional JSON output file.")
     args = parser.parse_args()
 
     max_pages = clamp_max_pages(args.max_pages)
-    result = crawl(args.url, max_pages, args.user_agent)
+    result = crawl(args.url, max_pages, args.user_agent, preferred_fetcher=args.fetcher)
     payload = json.dumps(result, ensure_ascii=False, indent=2)
     if args.out:
         Path(args.out).write_text(payload, encoding="utf-8")

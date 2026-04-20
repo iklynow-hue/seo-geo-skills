@@ -10,6 +10,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
+# Import prerequisite checker from fetchers
+from fetchers import check_prerequisites, print_prereq_summary
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CRAWL_SCRIPT = SCRIPT_DIR / "crawl_sample.py"
@@ -396,6 +399,27 @@ def main() -> int:
         action="store_true",
         help="Prompt securely for the PageSpeed API key if one is not already set.",
     )
+    parser.add_argument(
+        "--fetcher",
+        default="auto",
+        choices=["auto", "scrapling", "lightpanda", "agent_browser", "urllib"],
+        help="Preferred fetcher for crawl. 'auto' tries Scrapling → Lightpanda → agent-browser → urllib.",
+    )
+    parser.add_argument(
+        "--local-lighthouse-fallback",
+        action="store_true",
+        help="Fall back to local Lighthouse via CDP when PageSpeed API fails.",
+    )
+    parser.add_argument(
+        "--skip-prereq-check",
+        action="store_true",
+        help="Skip prerequisite detection.",
+    )
+    parser.add_argument(
+        "--auto-install-prereqs",
+        action="store_true",
+        help="Auto-install missing fetcher prerequisites before running the audit.",
+    )
     args = parser.parse_args()
 
     max_pages = pick_max_pages(args.mode, args.max_pages)
@@ -405,6 +429,13 @@ def main() -> int:
     manifest_path = out_dir / "audit-run.json"
     html_report_path = out_dir / "audit-report.html" if args.html_report else None
 
+    # Run prerequisite check. Auto-install is opt-in because it mutates the machine.
+    if not args.skip_prereq_check:
+        print("Checking prerequisites...")
+        prereq_status = check_prerequisites(auto_install=args.auto_install_prereqs)
+        print_prereq_summary(prereq_status)
+        print()
+
     crawl_cmd = [
         sys.executable,
         str(CRAWL_SCRIPT),
@@ -412,6 +443,8 @@ def main() -> int:
         args.url,
         "--max-pages",
         str(max_pages),
+        "--fetcher",
+        args.fetcher,
         "--out",
         str(crawl_path),
     ]
@@ -438,6 +471,8 @@ def main() -> int:
             pagespeed_cmd.extend(["--api-key", args.api_key])
         if args.prompt_pagespeed_key:
             pagespeed_cmd.append("--prompt-api-key")
+        if args.local_lighthouse_fallback:
+            pagespeed_cmd.append("--local-lighthouse-fallback")
         pagespeed_result = run_command(pagespeed_cmd, check=False)
         if pagespeed_result.stdout:
             print(pagespeed_result.stdout, end="")

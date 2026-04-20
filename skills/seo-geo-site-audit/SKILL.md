@@ -23,6 +23,64 @@ It intentionally combines the strongest parts of classic technical SEO audits wi
 - trust and EEAT signals
 - mobile + desktop PageSpeed evidence
 
+## Multi-Layer Fetch Architecture
+
+The skill supports JS-rendered crawling through a fetcher priority chain:
+
+```
+Scrapling (StealthyFetcher/Camoufox, JS-rendered) — primary
+  → Lightpanda (headless CDP browser, fast) — secondary
+    → agent-browser (Playwright-based) — tertiary
+      → urllib.request (raw HTTP, no JS) — fallback
+```
+
+**Why:** SPA sites (e.g., React, Angular, Vue) serve a thin JS shell in initial HTML. Raw HTTP requests see no content, no internal links, and produce shallow single-page audits. JS rendering fixes this.
+
+**Scrapling** (Camoufox mode) is always the primary fetcher — it provides full JS rendering, waits for `networkIdle`, and is the most reliable for content extraction.
+
+**Lightpanda** is preferred as secondary because it's significantly faster than full Playwright.
+
+**agent-browser** is the last-resort headless browser option.
+
+**urllib** remains the innermost fallback for non-HTML resources (robots.txt, sitemaps) and when no browser is available.
+
+### Prerequisite Detection
+
+When the wrapper runs, it checks which optional SPA fetchers are available:
+
+- **Scrapling:** `pip install "scrapling[fetchers]"` + `scrapling install` (downloads Camoufox browser)
+- **Lightpanda:** Downloads nightly binary to `~/.local/bin/lightpanda` (macOS arm64, macOS x86_64, Linux x86_64, Linux aarch64)
+- **agent-browser:** `npm install -g agent-browser` + `agent-browser install` (downloads Chrome)
+
+It does **not** auto-install these tools by default.
+
+- Use `--auto-install-prereqs` if you want the wrapper to install missing prerequisites.
+- Use `--skip-prereq-check` to skip the detection step entirely.
+
+### SPA Detection
+
+After fetching each page, the crawler runs `detect_spa_shell()` which checks:
+
+- `word_count < 100` AND `script_count >= 5` → likely SPA shell
+- `word_count < 50` AND `script_count >= 3` → thin HTML
+- Results are stored in `spa_detection` field per page and aggregated in the crawl summary
+
+### PageSpeed Local Lighthouse Fallback
+
+When the PageSpeed Insights API fails (timeout, quota, 5xx errors), the skill can fall back to running **Lighthouse locally**:
+
+1. Starts Lightpanda CDP on port 19222 when Lightpanda is available
+2. Otherwise runs Lighthouse through its normal local browser path
+3. Preserves the requested `mobile` or `desktop` strategy
+4. Parses the Lighthouse JSON into the same schema as API results
+5. Tags results with `"source": "local_lighthouse"` (vs `"source": "api"`)
+
+Enable with `--local-lighthouse-fallback`. Requires `lighthouse` CLI or `npx` available.
+
+PageSpeed API improvements:
+- Timeout increased from 20s to 45s
+- Retries increased from 2 to 3 with exponential backoff (2s, 4s, 8s)
+
 ## Guardrails
 
 - Treat the crawl as a **sample**, not a full index.
@@ -346,8 +404,9 @@ Include everything in Operator mode plus:
 
 ## Files In This Skill
 
-- `scripts/crawl_sample.py` — capped crawl + HTML signal extraction
-- `scripts/pagespeed_batch.py` — mobile / desktop PageSpeed collection
+- `scripts/fetchers.py` — unified fetcher with prereq detection, auto-install, and SPA detection
+- `scripts/crawl_sample.py` — capped crawl + HTML signal extraction (uses unified fetcher)
+- `scripts/pagespeed_batch.py` — mobile / desktop PageSpeed collection + local Lighthouse fallback
 - `scripts/audit_site.py` — one-command wrapper for crawl + PageSpeed artifacts
 - `scripts/audit-site` — executable launcher for the wrapper
 - `references/scoring-rubric.md` — scoring rules and weights
@@ -364,10 +423,35 @@ For a simpler CLI flow, use the wrapper script:
   --html-report
 ```
 
+### New CLI Flags
+
+| Flag | Description |
+|---|---|
+| `--fetcher auto\|scrapling\|lightpanda\|agent_browser\|urllib` | Preferred fetcher. Default: `auto` (tries all in priority order) |
+| `--local-lighthouse-fallback` | Fall back to local Lighthouse via CDP when PageSpeed API fails |
+| `--skip-prereq-check` | Skip prerequisite detection |
+| `--auto-install-prereqs` | Auto-install missing fetcher prerequisites |
+
+Full example with SPA-friendly crawl and local Lighthouse fallback:
+
+```bash
+/Users/klyment/.agents/skills/seo-geo-site-audit/scripts/audit-site \
+  https://www.mcmarkets.com \
+  --mode template \
+  --output-style operator \
+  --fetcher auto \
+  --local-lighthouse-fallback \
+  --html-report
+```
+
 What it does:
 
-- runs the capped crawl
+- checks which optional fetcher prerequisites are available
+- can auto-install missing prerequisites only if `--auto-install-prereqs` is supplied
+- runs the capped crawl with JS rendering via the fetcher priority chain
+- detects SPA shells and reports `spa_detection` per page
 - runs representative mobile + desktop PageSpeed unless `--skip-pagespeed` is used
+- falls back to local Lighthouse when PageSpeed API fails (if `--local-lighthouse-fallback` is set)
 - can write `audit-report.html` when `--html-report` is supplied
 - stores `crawl.json`, `pagespeed.json`, `audit-run.json`, and any optional HTML report together in one output folder under `/tmp` by default
 
@@ -376,3 +460,4 @@ What it does:
 - `Use $seo-geo-site-audit to audit https://example.com. Ask me to confirm the crawl setup first.`
 - `Run a standard SEO + GEO audit for https://example.com, use 25 pages, and generate the HTML report too.`
 - `Audit this site for AI visibility and technical SEO. Ask whether I want best-effort PageSpeed, skip, or paste a key in chat before you continue.`
+- `Audit this SPA site with JS rendering and local Lighthouse fallback: https://www.mcmarkets.com`

@@ -34,6 +34,7 @@ Use `seo-geo-site-audit` when you want:
 - a scored audit with passed items, issues, evidence, and actions
 - optional PageSpeed data
 - optional HTML output for the artifact bundle
+- optional SPA-friendly rendering through installed browser fetchers
 
 ## How To Use It
 
@@ -109,6 +110,10 @@ Useful options:
 - `--api-key YOUR_KEY`
 - `--skip-pagespeed`
 - `--html-report`
+- `--fetcher auto|scrapling|lightpanda|agent_browser|urllib`
+- `--local-lighthouse-fallback`
+- `--auto-install-prereqs`
+- `--skip-prereq-check`
 - `--out-dir /path/to/output`
 
 Artifacts written by the wrapper:
@@ -130,6 +135,29 @@ The skill can use Google PageSpeed Insights by:
 If no key is available, the audit can still continue, but the performance section may be partial if Google rate-limits requests.
 
 If best-effort PageSpeed fails or comes back partial, the final result should say so clearly and tell you that rerunning with an API key will give more reliable performance evidence.
+
+## SPA Support Notes
+
+The crawl can use a fetcher priority chain:
+
+- `scrapling`
+- `lightpanda`
+- `agent-browser`
+- `urllib`
+
+By default the wrapper only checks which of those are available. It does **not** auto-install them unless you pass:
+
+```bash
+--auto-install-prereqs
+```
+
+If you want local Lighthouse fallback when the PageSpeed API fails, use:
+
+```bash
+--local-lighthouse-fallback
+```
+
+That fallback preserves the requested mobile or desktop strategy and prefers Lightpanda CDP when available.
 
 ## How To Read The Scores
 
