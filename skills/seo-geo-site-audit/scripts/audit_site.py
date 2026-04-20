@@ -15,11 +15,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 CRAWL_SCRIPT = SCRIPT_DIR / "crawl_sample.py"
 PAGESPEED_SCRIPT = SCRIPT_DIR / "pagespeed_batch.py"
 DEFAULT_MAX_PAGESPEED_URLS = 5
+MAX_CRAWL_PAGES = 25
 MODE_DEFAULTS = {
     "fast": 1,
+    "light": 10,
     "template": 25,
-    "full": 50,
-    "deep": 100,
 }
 
 
@@ -51,7 +51,7 @@ def read_json(path: Path) -> dict:
 
 def pick_max_pages(mode: str, override: int | None) -> int:
     if override is not None:
-        return max(1, min(100, override))
+        return max(1, min(MAX_CRAWL_PAGES, override))
     return MODE_DEFAULTS[mode]
 
 
@@ -64,7 +64,7 @@ def write_manifest(
     max_pages: int,
     crawl_path: Path,
     pagespeed_path: Path | None,
-    html_summary_path: Path | None,
+    html_report_path: Path | None,
 ) -> None:
     crawl = read_json(crawl_path)
     pages = crawl.get("pages", [])
@@ -77,7 +77,7 @@ def write_manifest(
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "crawl_path": str(crawl_path),
         "pagespeed_path": str(pagespeed_path) if pagespeed_path else None,
-        "html_summary_path": str(html_summary_path) if html_summary_path else None,
+        "html_report_path": str(html_report_path) if html_report_path else None,
         "pages_sampled": len(pages),
         "pagespeed_urls_tested": pagespeed.get("tested_urls", []),
         "pagespeed_error_count": len(pagespeed.get("errors", [])) if pagespeed else 0,
@@ -115,7 +115,7 @@ def fmt_list(items: list[str]) -> str:
     return "<ul>" + "".join(f"<li>{html.escape(item)}</li>" for item in items) + "</ul>"
 
 
-def build_html_summary(
+def build_html_report(
     *,
     target_url: str,
     mode: str,
@@ -168,7 +168,7 @@ def build_html_summary(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SEO/GEO Audit Summary - {html.escape(target_url)}</title>
+  <title>SEO/GEO Audit Report - {html.escape(target_url)}</title>
   <style>
     :root {{
       color-scheme: light;
@@ -255,8 +255,8 @@ def build_html_summary(
 </head>
 <body>
   <main>
-    <h1>SEO/GEO Audit Summary</h1>
-    <p class="lede">Artifact summary for <strong>{html.escape(target_url)}</strong>. This page captures crawl coverage, structural signals, and any collected PageSpeed averages. Final scored conclusions should still be written using the scoring rubric and report template.</p>
+    <h1>SEO/GEO Audit Report</h1>
+    <p class="lede">Report view for <strong>{html.escape(target_url)}</strong>. This page captures crawl coverage, structural signals, and any collected PageSpeed averages. Final scored conclusions should still be written using the scoring rubric and report template.</p>
 
     <section class="grid">
       <article class="panel">
@@ -328,7 +328,7 @@ def build_html_summary(
     </section>
 
     <div class="callout">
-      <strong>Reading this file:</strong> treat it as an audit artifact summary, not the final scorecard. Use the crawl and PageSpeed evidence here together with the scoring rubric to produce the final 0-100 section scores and roadmap.
+      <strong>Reading this report:</strong> treat it as a structured evidence report, not the final scorecard by itself. Use the crawl and PageSpeed evidence here together with the scoring rubric to produce the final 0-100 section scores and roadmap.
     </div>
   </main>
 </body>
@@ -336,7 +336,7 @@ def build_html_summary(
 """
 
 
-def write_html_summary(
+def write_html_report(
     html_path: Path,
     *,
     target_url: str,
@@ -348,7 +348,7 @@ def write_html_summary(
 ) -> None:
     crawl = read_json(crawl_path)
     pagespeed = read_json(pagespeed_path) if pagespeed_path and pagespeed_path.exists() else None
-    html_payload = build_html_summary(
+    html_payload = build_html_report(
         target_url=target_url,
         mode=mode,
         output_style=output_style,
@@ -361,7 +361,7 @@ def write_html_summary(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Run a one-command SEO/GEO site audit sample with optional PageSpeed prompting."
+        description="Run a one-command SEO/GEO site audit sample with up to 25 pages."
     )
     parser.add_argument("url", help="Target site URL, usually the homepage.")
     parser.add_argument(
@@ -370,7 +370,7 @@ def main() -> int:
         default="template",
         help="Audit depth preset. Default: template.",
     )
-    parser.add_argument("--max-pages", type=int, help="Override the crawl cap (1-100).")
+    parser.add_argument("--max-pages", type=int, help="Override the crawl cap (1-25).")
     parser.add_argument(
         "--output-style",
         choices=("boss", "operator", "specialist"),
@@ -388,7 +388,7 @@ def main() -> int:
     parser.add_argument(
         "--html-report",
         action="store_true",
-        help="Write a static HTML summary artifact alongside the crawl and PageSpeed JSON files.",
+        help="Write a static HTML report alongside the crawl and PageSpeed JSON files.",
     )
     parser.add_argument("--api-key", help="Google PageSpeed Insights API key.")
     parser.add_argument(
@@ -403,7 +403,7 @@ def main() -> int:
     crawl_path = out_dir / "crawl.json"
     pagespeed_path = out_dir / "pagespeed.json"
     manifest_path = out_dir / "audit-run.json"
-    html_summary_path = out_dir / "audit-summary.html" if args.html_report else None
+    html_report_path = out_dir / "audit-report.html" if args.html_report else None
 
     crawl_cmd = [
         sys.executable,
@@ -437,9 +437,9 @@ def main() -> int:
         run_command(pagespeed_cmd)
         pagespeed_path_out = pagespeed_path
 
-    if html_summary_path:
-        write_html_summary(
-            html_summary_path,
+    if html_report_path:
+        write_html_report(
+            html_report_path,
             target_url=args.url,
             mode=args.mode,
             output_style=args.output_style,
@@ -456,7 +456,7 @@ def main() -> int:
         max_pages=max_pages,
         crawl_path=crawl_path,
         pagespeed_path=pagespeed_path_out,
-        html_summary_path=html_summary_path,
+        html_report_path=html_report_path,
     )
 
     print(f"Audit artifacts saved to: {out_dir}")
@@ -465,8 +465,8 @@ def main() -> int:
         print(f"- PageSpeed JSON: {pagespeed_path_out}")
     else:
         print("- PageSpeed JSON: skipped")
-    if html_summary_path:
-        print(f"- HTML summary: {html_summary_path}")
+    if html_report_path:
+        print(f"- HTML report: {html_report_path}")
     print(f"- Run manifest: {manifest_path}")
     print(f"Recorded mode: {args.mode} ({max_pages} pages), output style: {args.output_style}")
     return 0

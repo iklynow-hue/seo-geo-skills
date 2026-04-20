@@ -48,7 +48,7 @@ The skill is designed to ask you to confirm:
 - crawl mode and page cap
 - output style
 - PageSpeed handling
-- whether you want HTML output
+- whether you want the HTML report
 
 If the agent follows the skill well, it should ask those questions **one by one** before crawling, with numbered choices.
 
@@ -56,10 +56,9 @@ Expected flow:
 
 1. Scope
    `1. Fast check (1 page)`
-   `2. Template audit (10 pages)`
-   `3. Template audit (25 pages, recommended)`
-   `4. Full site audit (50 pages)`
-   `5. Deep investigation (100 pages)`
+   `2. Light template audit (10 pages)`
+   `3. Standard template audit (25 pages, recommended and maximum)`
+   `4. Custom page cap up to 25`
 
 2. Output style
    `1. Operator (recommended)`
@@ -69,19 +68,19 @@ Expected flow:
 3. PageSpeed
    `1. Best-effort without key (recommended)`
    `2. Skip PageSpeed`
-   `3. Prompt me securely in the terminal for the API key`
-   `4. I will paste the API key in chat`
+   `3. I will paste the API key in chat`
 
-   If you choose `4`, the agent should ask you to paste the key in the next message.
+   If you choose `3`, the agent should ask you to paste the key in the next message.
+   After the audit, it should also remind you that you may want to rotate or replace that key because it was shared in chat.
 
-4. HTML artifact
+4. HTML report
    `1. Off (recommended)`
    `2. On`
 
 If it does not ask, say this explicitly:
 
 ```text
-Use $seo-geo-site-audit to audit https://mcmarkets.com. Ask me the setup questions one by one with numbered options for scope, output style, PageSpeed handling, and HTML output before you begin.
+Use $seo-geo-site-audit to audit https://mcmarkets.com. Ask me the setup questions one by one with numbered options for scope, output style, PageSpeed handling, and HTML report before you begin.
 ```
 
 That prompt is the safest starting point in fresh sessions.
@@ -99,16 +98,14 @@ For terminal use, run the wrapper directly:
   https://mcmarkets.com \
   --mode template \
   --output-style operator \
-  --prompt-pagespeed-key \
   --html-report
 ```
 
 Useful options:
 
-- `--mode fast|template|full|deep`
-- `--max-pages N`
+- `--mode fast|light|template`
+- `--max-pages 1-25`
 - `--output-style boss|operator|specialist`
-- `--prompt-pagespeed-key`
 - `--api-key YOUR_KEY`
 - `--skip-pagespeed`
 - `--html-report`
@@ -119,7 +116,7 @@ Artifacts written by the wrapper:
 - `crawl.json`
 - `pagespeed.json` unless skipped
 - `audit-run.json`
-- `audit-summary.html` when `--html-report` is enabled
+- `audit-report.html` when `--html-report` is enabled
 
 ## PageSpeed API Key
 
@@ -127,10 +124,12 @@ The skill can use Google PageSpeed Insights by:
 
 - `PAGESPEED_API_KEY`
 - `GOOGLE_API_KEY`
-- a one-off terminal prompt via `--prompt-pagespeed-key`
+- pasting a key in chat so the wrapper can run with `--api-key`
 - best-effort mode without a key
 
 If no key is available, the audit can still continue, but the performance section may be partial if Google rate-limits requests.
+
+If best-effort PageSpeed fails or comes back partial, the final result should say so clearly and tell you that rerunning with an API key will give more reliable performance evidence.
 
 ## How To Read The Scores
 
