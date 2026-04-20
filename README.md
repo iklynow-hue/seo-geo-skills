@@ -1,33 +1,45 @@
-# SGEO — Unified SEO + GEO Master Audit
+# SGEO — Unified SEO + GEO Master Audit Skill
 
-Combined SEO and GEO analysis with MECE (Mutually Exclusive, Collectively Exhaustive) framework.
-Produces dual scores: **SEO Score** (traditional search) and **GEO Score** (AI search visibility).
+SGEO combines classic SEO auditing with GEO and AI-search readiness checks in one skill.
+It uses a MECE (Mutually Exclusive, Collectively Exhaustive) framework and produces dual scores:
+
+- **SEO Score** for traditional search readiness
+- **GEO Score** for AI search visibility and extractability
+
+The repo includes the skill definition, installation helpers, reference docs, and script-backed checks that can be used from Claude CLI, Codex CLI, or directly from the terminal.
 
 ## Quick Start
 
 ```bash
-# Clone
-git clone <your-repository-url>
-cd seo-geo-master-check
+# Clone the repo
+git clone https://github.com/iklynow-hue/seo-geo-skills
+cd seo-geo-skills
 
-# Install (macOS / Linux)
+# Install the skill (macOS / Linux)
 bash install.sh
 
-# Install (Windows — PowerShell)
+# Or install on Windows (PowerShell)
 powershell -ExecutionPolicy Bypass -File install.ps1
 
-# Run audit
+# Start Claude or Codex and invoke the skill
 claude
 > sgeo audit https://example.com
+```
+
+You can also run the underlying scripts directly from the repo:
+
+```bash
+python3 scripts/generate_report.py https://example.com
 ```
 
 ## Features
 
 - **Dual Scoring**: Independent SEO and GEO scores from single audit
 - **MECE Framework**: No overlap, complete coverage across 10 categories
-- **Script-Backed**: 22 Python scripts for deterministic verification
+- **Script-Backed**: 20+ Python scripts for deterministic verification
 - **Cross-Platform**: Works on macOS, Linux, and Windows
 - **FAQPage Policy**: Keep FAQPage schema for AI search benefits (despite Google restriction)
+- **Config Support**: Supports project and user config files, including PageSpeed API key setup
 
 ## Commands
 
@@ -88,6 +100,77 @@ This will:
 2. Create symlink at `~/.claude/skills/sgeo`
 3. Verify installation
 
+After install, the skill can be used from either Claude CLI or Codex CLI through the same symlinked skill directory.
+
+## Usage
+
+### In Claude or Codex
+
+Open the CLI and ask for the workflow you want:
+
+```text
+sgeo audit https://example.com
+sgeo seo https://example.com
+sgeo geo https://example.com
+sgeo page https://example.com/pricing
+```
+
+You can also use more natural language when the agent already has the skill installed, for example:
+
+```text
+Audit https://example.com for SEO and GEO issues.
+Run an SEO-only audit for https://example.com.
+Check whether https://example.com is well prepared for AI search.
+```
+
+### From the Terminal
+
+Run the bundled scripts directly when you want deterministic checks or local report generation:
+
+```bash
+python3 scripts/generate_report.py https://example.com
+python3 scripts/pagespeed.py https://example.com --strategy mobile
+python3 scripts/robots_checker.py https://example.com
+```
+
+## PageSpeed API Key Setup
+
+Some performance checks may be rate-limited without a Google PageSpeed Insights API key. SGEO supports storing the key in config files.
+
+Configuration priority is:
+
+1. CLI flags
+2. `sgeo.config.json` in the project root
+3. `~/.sgeorc` in YAML format
+4. Built-in defaults
+
+### Project Config Example
+
+Create `sgeo.config.json` in the repo root:
+
+```json
+{
+  "api_keys": {
+    "pagespeed": "YOUR_API_KEY_HERE"
+  },
+  "timeout": 30,
+  "max_workers": 10
+}
+```
+
+### User Config Example
+
+Create `~/.sgeorc`:
+
+```yaml
+api_keys:
+  pagespeed: "YOUR_API_KEY_HERE"
+timeout: 30
+max_workers: 10
+```
+
+If no key is configured, PageSpeed-based checks may still work, but Google quota and rate limiting can make the performance evidence partial.
+
 ### Uninstall
 
 macOS / Linux:
@@ -110,7 +193,7 @@ seo-geo-skills/
 ├── install.ps1                 # Install script (Windows)
 ├── uninstall.sh                # Uninstall script (macOS/Linux)
 ├── uninstall.ps1               # Uninstall script (Windows)
-├── scripts/                    # 22 audit scripts
+├── scripts/                    # Script-backed SEO/GEO checks and report tooling
 │   ├── fetch_page.py
 │   ├── parse_html.py
 │   ├── robots_checker.py
@@ -316,7 +399,7 @@ Top GEO Issues:
 Already integrated via symlink at `~/.claude/skills/sgeo`
 
 ### Codex CLI
-Same symlink works for Codex CLI
+The same symlinked skill directory works for Codex CLI
 
 ### Standalone
 ```bash
