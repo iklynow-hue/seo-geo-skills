@@ -1,10 +1,16 @@
-# SEO GEO Site Audit Skill
+# SEO GEO Skills
 
-This repo is now focused on one skill only:
+Public skill repo for:
 
 - `skills/seo-geo-site-audit/`
 
-Use it for sampled SEO + GEO audits of public sites, with optional PageSpeed coverage and an optional HTML audit artifact.
+This skill works with both Codex and Claude Code for sampled SEO + GEO audits of public sites, with:
+
+- capped crawling up to 25 pages
+- template-aware sampling
+- local Lighthouse by default
+- optional PageSpeed API support
+- optional bilingual HTML reporting
 
 ## Install
 
@@ -15,91 +21,63 @@ git clone https://github.com/iklynow-hue/seo-geo-skills
 cd seo-geo-skills
 ```
 
-Link the skill into your global skills folder:
+Link the skill into your local skills folder:
 
 ```bash
 mkdir -p ~/.agents/skills
 ln -s "$PWD/skills/seo-geo-site-audit" ~/.agents/skills/seo-geo-site-audit
 ```
 
-If you already have an older local copy, replace it or update the symlink target.
+For Claude Code, the skill also includes a local [CLAUDE.md](skills/seo-geo-site-audit/CLAUDE.md) entry file.
 
-## When To Use It
+## Use Cases
 
 Use `seo-geo-site-audit` when you want:
 
-- a sampled site audit instead of a full crawl
-- SEO + GEO analysis in one pass
-- a template-based review across key page types
-- a scored audit with passed items, issues, evidence, and actions
-- optional PageSpeed data
-- optional HTML output for the artifact bundle
-- optional SPA-friendly rendering through installed browser fetchers
+- an SEO audit
+- a GEO / AI visibility audit
+- a sampled site-quality review instead of a full crawl
+- a scored report with evidence, issues, and recommended actions
+- optional HTML output for sharing
 
-## How To Use It
+## Chat Usage
 
-In Codex or Claude, start with:
+Start with:
 
 ```text
-Use $seo-geo-site-audit to audit https://mcmarkets.com
+Use $seo-geo-site-audit to audit https://example.com
 ```
 
-The skill is designed to ask you to confirm:
-
-- crawl mode and page cap
-- output style
-- PageSpeed handling
-- whether you want the HTML report
-
-If the agent follows the skill well, it should ask those questions **one by one** before crawling, with numbered choices.
-
-Expected flow:
+The skill is designed to ask setup questions one by one before crawling:
 
 1. Scope
-   `1. Fast check (1 page)`
-   `2. Light template audit (10 pages)`
-   `3. Standard template audit (25 pages, recommended and maximum)`
-   `4. Custom page cap up to 25`
-
 2. Output style
-   `1. Operator (recommended)`
-   `2. Boss`
-   `3. Specialist`
+3. Performance evidence mode
+4. HTML report on/off
+5. HTML report language, only if HTML output is enabled
 
-3. PageSpeed
-   `1. Best-effort without key (recommended)`
-   `2. Skip PageSpeed`
-   `3. I will paste the API key in chat`
+Current performance choices:
 
-   If you choose `3`, the agent should ask you to paste the key in the next message.
-   After the audit, it should also remind you that you may want to rotate or replace that key because it was shared in chat.
+- `1. Local Lighthouse (recommended)`
+- `2. Skip PageSpeed`
+- `3. Use existing PageSpeed API key from env`
+- `4. I will paste the API key in chat`
 
-4. HTML report
-   `1. Off (recommended)`
-   `2. On`
+If HTML output is enabled, the follow-up language choices are:
 
-If it does not ask, say this explicitly:
+- `1. English`
+- `2. Chinese`
+- `3. Other (type it in)`
 
-```text
-Use $seo-geo-site-audit to audit https://mcmarkets.com. Ask me the setup questions one by one with numbered options for scope, output style, PageSpeed handling, and HTML report before you begin.
-```
+## Terminal Usage
 
-That prompt is the safest starting point in fresh sessions.
-
-## Wrapper Command
-
-The wrapper is the required execution path for normal audits.
-
-Even when you use the skill from chat, the agent should ultimately run the wrapper rather than stitching together the lower-level scripts manually.
-
-For terminal use, run the wrapper directly:
+Use the wrapper for normal runs:
 
 ```bash
 ~/.agents/skills/seo-geo-site-audit/scripts/audit-site \
-  https://mcmarkets.com \
+  https://example.com \
   --mode template \
-  --output-style operator \
-  --html-report
+  --output-style operator
 ```
 
 Useful options:
@@ -107,85 +85,42 @@ Useful options:
 - `--mode fast|light|template`
 - `--max-pages 1-25`
 - `--output-style boss|operator|specialist`
+- `--pagespeed-provider local|api|api_with_fallback`
 - `--api-key YOUR_KEY`
 - `--skip-pagespeed`
 - `--html-report`
+- `--report-language english|chinese`
 - `--fetcher auto|scrapling|lightpanda|agent_browser|urllib`
-- `--local-lighthouse-fallback`
 - `--auto-install-prereqs`
 - `--skip-prereq-check`
 - `--out-dir /path/to/output`
 
-Artifacts written by the wrapper:
+Artifacts:
 
 - `crawl.json`
 - `pagespeed.json` unless skipped
 - `audit-run.json`
-- `audit-report.html` when `--html-report` is enabled
+- `audit-report.html` when HTML output is enabled
 
-## PageSpeed API Key
+## Security
 
-The skill can use Google PageSpeed Insights by:
+This repo is intended to be safe for public cloning.
 
-- `PAGESPEED_API_KEY`
-- `GOOGLE_API_KEY`
-- pasting a key in chat so the wrapper can run with `--api-key`
-- best-effort mode without a key
+- No API keys should ever be hardcoded in source, docs, or artifacts.
+- PageSpeed keys should only come from:
+  - `PAGESPEED_API_KEY`
+  - `GOOGLE_API_KEY`
+  - a one-off key provided by the user in the current chat/session
+- The code should only persist `api_key_used: true/false`, never the key itself.
 
-If no key is available, the audit can still continue, but the performance section may be partial if Google rate-limits requests.
+See:
 
-If best-effort PageSpeed fails or comes back partial, the final result should say so clearly and tell you that rerunning with an API key will give more reliable performance evidence.
+- [skills/seo-geo-site-audit/SECURITY.md](skills/seo-geo-site-audit/SECURITY.md)
 
-## SPA Support Notes
+## Contribution Policy
 
-The crawl can use a fetcher priority chain:
+Cloning and forking are welcome.
 
-- `scrapling`
-- `lightpanda`
-- `agent-browser`
-- `urllib`
+Please do not open pull requests for this repository. The maintainer is not reviewing PRs right now.
 
-By default the wrapper only checks which of those are available. It does **not** auto-install them unless you pass:
-
-```bash
---auto-install-prereqs
-```
-
-If you want local Lighthouse fallback when the PageSpeed API fails, use:
-
-```bash
---local-lighthouse-fallback
-```
-
-That fallback preserves the requested mobile or desktop strategy and prefers Lightpanda CDP when available.
-
-## How To Read The Scores
-
-The audit uses seven weighted sections:
-
-| Section | Weight |
-|---|---:|
-| Technical SEO & Indexability | 20 |
-| On-Page SEO & Content Packaging | 15 |
-| Information Architecture & Internal Linking | 10 |
-| GEO & AI Extractability | 20 |
-| EEAT & Trust Signals | 15 |
-| Entity & Structured Data | 10 |
-| Performance & Page Experience | 10 |
-
-Interpretation:
-
-| Score | Meaning |
-|---|---|
-| 90-100 | Excellent foundation |
-| 75-89 | Good base with notable gaps |
-| 60-74 | Mixed readiness |
-| 40-59 | Weak foundation |
-| 0-39 | Critical blockers |
-
-Read the results with these guardrails:
-
-- it is a sample, not a full-site crawl
-- repeated sitewide issues matter more than isolated one-offs
-- lower crawl coverage means lower confidence
-- incomplete PageSpeed coverage means lower confidence in the performance section
+If you need to report a bug or suggest an improvement, open an issue instead.

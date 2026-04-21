@@ -1,6 +1,6 @@
 ---
 name: seo-geo-site-audit
-description: Run repeatable SEO and GEO website audits for public sites. Use when the user asks for an SEO audit, GEO audit, AI visibility review, technical content-readiness review, or a site-quality audit that should crawl a representative sample of up to 25 pages, review crawlability, metadata, internal linking, structured data, trust signals, and summarize desktop/mobile PageSpeed results with scored sections, passed items, issues, and prioritized actions.
+description: Run repeatable SEO and GEO website audits for public sites. Use when the user asks for an SEO audit, GEO audit, AI visibility review, technical content-readiness review, or a site-quality audit that should crawl a representative sample of up to 25 pages, review crawlability, metadata, internal linking, structured data, trust signals, and summarize mobile/desktop performance evidence from local Lighthouse or PageSpeed API results with scored sections, passed items, issues, and prioritized actions.
 ---
 
 # SEO GEO Site Audit
@@ -21,7 +21,7 @@ It intentionally combines the strongest parts of classic technical SEO audits wi
 - structured data and entity consistency
 - answer-first / extractability patterns for AI systems
 - trust and EEAT signals
-- mobile + desktop PageSpeed evidence
+- mobile + desktop performance evidence from local Lighthouse or PageSpeed API
 
 ## Multi-Layer Fetch Architecture
 
@@ -65,9 +65,15 @@ After fetching each page, the crawler runs `detect_spa_shell()` which checks:
 - `word_count < 50` AND `script_count >= 3` → thin HTML
 - Results are stored in `spa_detection` field per page and aggregated in the crawl summary
 
-### PageSpeed Local Lighthouse Fallback
+### Performance Evidence Modes
 
-When the PageSpeed Insights API fails (timeout, quota, 5xx errors), the skill can fall back to running **Lighthouse locally**:
+The skill supports three performance evidence modes:
+
+- **Local Lighthouse** — default and recommended for normal audits
+- **PageSpeed API** — optional when you want CrUX / real-user field data
+- **PageSpeed API with local Lighthouse fallback** — try API first, then recover locally on failure
+
+When using **Lighthouse locally**, the skill:
 
 1. Starts Lightpanda CDP on port 19222 when Lightpanda is available
 2. Otherwise runs Lighthouse through its normal local browser path
@@ -75,7 +81,7 @@ When the PageSpeed Insights API fails (timeout, quota, 5xx errors), the skill ca
 4. Parses the Lighthouse JSON into the same schema as API results
 5. Tags results with `"source": "local_lighthouse"` (vs `"source": "api"`)
 
-Enable with `--local-lighthouse-fallback`. Requires `lighthouse` CLI or `npx` available.
+Use `--pagespeed-provider local` for local-only runs, `--pagespeed-provider api` for API-only runs, or `--pagespeed-provider api_with_fallback` to try API first and recover locally. Requires `lighthouse` CLI or `npx` available for local runs.
 
 PageSpeed API improvements:
 - Timeout increased from 20s to 45s
@@ -90,6 +96,9 @@ PageSpeed API improvements:
 - Never imply access to Search Console, analytics, Ahrefs, SEMrush, or server logs unless the user actually provided them.
 - If PageSpeed data is unavailable because of quota or API failure, complete the audit anyway and clearly label performance evidence as partial.
 - Before running any crawl, do a short setup check when the user has not already specified scope. Do **not** silently pick crawl size, PageSpeed behavior, or HTML output and continue.
+- Never hardcode API keys, tokens, or secrets in this repo.
+- Never store a PageSpeed API key in tracked files, generated artifacts, manifests, or HTML output.
+- Only accept a PageSpeed API key from environment variables or the user's current chat/session.
 
 ## Audit Modes
 
@@ -120,9 +129,10 @@ Confirm:
 - target URL
 - mode and crawl cap
 - output style: **Boss**, **Operator**, or **Specialist**
-- PageSpeed handling:
-  existing env key, one-off prompted key, best-effort without key, or skip
+- performance evidence mode:
+  local Lighthouse, existing env API key, pasted API key, or skip
 - whether they want an optional HTML artifact
+- if HTML output is on, the report language
 
 Ask these questions **one by one**, not as a single block. Wait for the user's answer to each question before asking the next one.
 
@@ -151,11 +161,12 @@ Recommended setup sequence:
 3. **PageSpeed**
    Ask:
    `Choose PageSpeed handling:`
-   `1. Best-effort without key (recommended)`
+   `1. Local Lighthouse (recommended)`
    `2. Skip PageSpeed`
-   `3. I will paste the API key in chat`
+   `3. Use existing PageSpeed API key from env`
+   `4. I will paste the API key in chat`
 
-   If the user chooses `3`, ask one follow-up before continuing:
+   If the user chooses `4`, ask one follow-up before continuing:
    `Reply with your API key in the next message.`
 
 4. **HTML report**
@@ -164,13 +175,23 @@ Recommended setup sequence:
    `1. Off (recommended)`
    `2. On`
 
+   If the user chooses `2`, ask one follow-up before continuing:
+   `Choose the HTML report language:`
+   `1. English (recommended)`
+   `2. Chinese`
+   `3. Other (type it in)`
+
+   If the user chooses `3`, ask one more follow-up before continuing:
+   `Reply with the output language in the next message.`
+
 Recommended defaults you may suggest:
 
 - **Template audit**
 - **25** pages
 - **Operator** output
-- PageSpeed **best-effort** unless the user wants to paste a key in chat
+- performance evidence via **local Lighthouse**
 - HTML report **off** unless requested
+- if HTML is on, report language **English** unless the user asks otherwise
 
 Do not start the crawl until the user confirms the setup or explicitly says to use the defaults.
 
@@ -211,18 +232,23 @@ If the user does not want PageSpeed:
 
 If the user pastes an API key in chat, still use the wrapper and pass that key to it with `--api-key`.
 
-### 3. Handle PageSpeed key expectations explicitly
+### 3. Handle performance evidence expectations explicitly
 
-The PageSpeed script uses the official PageSpeed Insights API.
+The wrapper defaults to **local Lighthouse** for performance evidence.
+
+If the user explicitly chooses PageSpeed API, the PageSpeed script uses the official PageSpeed Insights API.
 
 - It tries `PAGESPEED_API_KEY` first, then `GOOGLE_API_KEY`.
 
 So in chat flows:
 
-- if the user already has an env key, continue normally through the wrapper
-- if they paste a key in chat, still execute through the wrapper with `--api-key`
-- if they do not want to manage a key, continue best-effort or skip and label performance evidence accordingly
+- if the user chooses local Lighthouse, continue normally through the wrapper without requiring an API key
+- if the user already has an env key and chooses API mode, execute through the wrapper with `--pagespeed-provider api`
+- if they paste a key in chat, execute through the wrapper with `--pagespeed-provider api --api-key`
+- if they want API evidence but also want resilience, use `--pagespeed-provider api_with_fallback`
+- if they do not want to manage a key, continue with local Lighthouse or skip and label performance evidence accordingly
 - if the user pasted a key in chat, warn them after the audit that they may want to rotate or replace that key because it was shared in conversation text
+- never write the raw key into repo files, JSON artifacts, HTML output, or error messages
 
 ### 4. Review the generated artifacts
 
@@ -290,7 +316,15 @@ Every issue should include:
 
 If the user requested HTML output, mention the generated `audit-report.html` path in the final response in addition to the written audit.
 
-If the audit used best-effort PageSpeed and PageSpeed results were partial or failed, explicitly say that in the final result and tell the user they can rerun the audit with an API key for more reliable performance evidence.
+Keep the final written audit in the selected output language.
+
+When HTML output is enabled, also pass the selected language to the wrapper with `--report-language`.
+
+Built-in static HTML localization currently supports **English** and **Chinese** directly.
+
+If the audit used local Lighthouse, explicitly say the performance evidence is lab-based and does not include CrUX field data.
+
+If the audit used API mode and PageSpeed results were partial or failed, explicitly say that in the final result and tell the user they can rerun with `--pagespeed-provider api_with_fallback` or switch to local Lighthouse.
 
 ## Output Modes
 
@@ -428,11 +462,13 @@ For a simpler CLI flow, use the wrapper script:
 | Flag | Description |
 |---|---|
 | `--fetcher auto\|scrapling\|lightpanda\|agent_browser\|urllib` | Preferred fetcher. Default: `auto` (tries all in priority order) |
-| `--local-lighthouse-fallback` | Fall back to local Lighthouse via CDP when PageSpeed API fails |
+| `--pagespeed-provider local\|api\|api_with_fallback` | Performance evidence source. Default: `local` |
+| `--report-language <language>` | HTML report language. Built-in localization supports English and Chinese |
+| `--local-lighthouse-fallback` | Compatibility alias for `--pagespeed-provider api_with_fallback` |
 | `--skip-prereq-check` | Skip prerequisite detection |
 | `--auto-install-prereqs` | Auto-install missing fetcher prerequisites |
 
-Full example with SPA-friendly crawl and local Lighthouse fallback:
+Full example with SPA-friendly crawl and local Lighthouse as the default performance source:
 
 ```bash
 /Users/klyment/.agents/skills/seo-geo-site-audit/scripts/audit-site \
@@ -440,7 +476,19 @@ Full example with SPA-friendly crawl and local Lighthouse fallback:
   --mode template \
   --output-style operator \
   --fetcher auto \
-  --local-lighthouse-fallback \
+  --report-language chinese \
+  --html-report
+```
+
+Example with API first and local Lighthouse fallback:
+
+```bash
+/Users/klyment/.agents/skills/seo-geo-site-audit/scripts/audit-site \
+  https://www.mcmarkets.com \
+  --mode template \
+  --output-style operator \
+  --fetcher auto \
+  --pagespeed-provider api_with_fallback \
   --html-report
 ```
 
@@ -450,14 +498,15 @@ What it does:
 - can auto-install missing prerequisites only if `--auto-install-prereqs` is supplied
 - runs the capped crawl with JS rendering via the fetcher priority chain
 - detects SPA shells and reports `spa_detection` per page
-- runs representative mobile + desktop PageSpeed unless `--skip-pagespeed` is used
-- falls back to local Lighthouse when PageSpeed API fails (if `--local-lighthouse-fallback` is set)
+- runs representative mobile + desktop performance checks unless `--skip-pagespeed` is used
+- uses local Lighthouse by default, or API / API-with-fallback when explicitly selected
 - can write `audit-report.html` when `--html-report` is supplied
+- can localize the static HTML artifact in English or Chinese via `--report-language`
 - stores `crawl.json`, `pagespeed.json`, `audit-run.json`, and any optional HTML report together in one output folder under `/tmp` by default
 
 ## Example Requests
 
 - `Use $seo-geo-site-audit to audit https://example.com. Ask me to confirm the crawl setup first.`
 - `Run a standard SEO + GEO audit for https://example.com, use 25 pages, and generate the HTML report too.`
-- `Audit this site for AI visibility and technical SEO. Ask whether I want best-effort PageSpeed, skip, or paste a key in chat before you continue.`
-- `Audit this SPA site with JS rendering and local Lighthouse fallback: https://www.mcmarkets.com`
+- `Audit this site for AI visibility and technical SEO. Ask whether I want local Lighthouse, skip, use an env API key, or paste a key in chat before you continue.`
+- `Audit this SPA site with JS rendering and local Lighthouse: https://www.mcmarkets.com`

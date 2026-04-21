@@ -380,9 +380,18 @@ def _fetch_agent_browser(url: str, timeout: int = FETCH_TIMEOUT) -> dict | None:
         try:
             data = json.loads(result.stdout)
             html_text = data.get("data", data.get("result", result.stdout))
+            if isinstance(html_text, dict):
+                html_text = (
+                    html_text.get("result")
+                    or html_text.get("html")
+                    or html_text.get("outerHTML")
+                    or ""
+                )
         except json.JSONDecodeError:
             html_text = result.stdout
 
+        if not isinstance(html_text, str):
+            html_text = str(html_text)
         if not html_text.strip():
             return None
         return {

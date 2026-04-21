@@ -1,11 +1,13 @@
 # Audit outputs
 outputs/
+.serena/
 
 # Python
 __pycache__/
 *.pyc
 *.pyo
 .env
+.env.*
 
 # OS
 .DS_Store

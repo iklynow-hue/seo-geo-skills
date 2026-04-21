@@ -51,18 +51,33 @@ def call_pagespeed(url: str, strategy: str, api_key: str | None, timeout: int = 
     return json.loads(raw)
 
 
+def classify_http_error(exc: urllib.error.HTTPError) -> tuple[RuntimeError, bool]:
+    body = exc.read().decode("utf-8", errors="replace")[:300].strip()
+    retryable = exc.code in RETRYABLE_STATUS_CODES
+    lowered = body.lower()
+    if exc.code == 429 and any(
+        marker in lowered
+        for marker in (
+            "quota exceeded",
+            "queries per day",
+            "daily limit exceeded",
+            "quota metric",
+        )
+    ):
+        retryable = False
+    message = f"HTTP Error {exc.code}"
+    if body:
+        message = f"{message}: {body}"
+    return RuntimeError(message), retryable
+
+
 def call_pagespeed_with_retry(url: str, strategy: str, api_key: str | None) -> dict:
     last_error: Exception | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             return call_pagespeed(url, strategy, api_key)
         except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")[:300].strip()
-            retryable = exc.code in RETRYABLE_STATUS_CODES
-            message = f"HTTP Error {exc.code}"
-            if body:
-                message = f"{message}: {body}"
-            last_error = RuntimeError(message)
+            last_error, retryable = classify_http_error(exc)
             if not retryable or attempt == MAX_ATTEMPTS:
                 raise last_error
         except (urllib.error.URLError, socket.timeout, TimeoutError) as exc:
@@ -267,12 +282,20 @@ def main() -> int:
         help="Prompt securely for a Google PageSpeed Insights API key if one is not already set.",
     )
     parser.add_argument(
+        "--provider",
+        choices=("local", "api", "api_with_fallback"),
+        default="local",
+        help="Performance evidence source. 'local' runs Lighthouse locally, 'api' uses PageSpeed API only, 'api_with_fallback' tries API first then local Lighthouse.",
+    )
+    parser.add_argument(
         "--local-lighthouse-fallback",
         action="store_true",
-        help="Fall back to local Lighthouse via CDP when PageSpeed API fails.",
+        help="Compatibility alias for --provider api_with_fallback.",
     )
     parser.add_argument("--out", help="Optional JSON output file.")
     args = parser.parse_args()
+
+    provider = "api_with_fallback" if args.local_lighthouse_fallback else args.provider
 
     urls = list(dict.fromkeys(args.url))
     if args.from_crawl:
@@ -282,16 +305,30 @@ def main() -> int:
         print("No URLs supplied.", file=sys.stderr)
         return 1
 
-    try:
-        api_key = resolve_api_key(args)
-    except RuntimeError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
+    api_key = None
+    if provider in {"api", "api_with_fallback"}:
+        try:
+            api_key = resolve_api_key(args)
+        except RuntimeError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
 
     results = []
     errors = []
     for url in urls:
         for strategy in ("mobile", "desktop"):
+            if provider == "local":
+                try:
+                    lh_result = run_local_lighthouse_fallback(url, strategy)
+                    if lh_result is not None:
+                        results.append(lh_result)
+                        print(f"[pagespeed] Local Lighthouse succeeded for {url} ({strategy})", file=sys.stderr)
+                    else:
+                        errors.append({"url": url, "strategy": strategy, "error": "Local Lighthouse unavailable or failed", "source": "local_lighthouse"})
+                except Exception as lh_exc:
+                    errors.append({"url": url, "strategy": strategy, "error": f"Local Lighthouse: {type(lh_exc).__name__}: {lh_exc}", "source": "local_lighthouse"})
+                continue
+
             api_success = False
             try:
                 payload = call_pagespeed_with_retry(url, strategy, api_key)
@@ -300,20 +337,22 @@ def main() -> int:
             except Exception as exc:
                 errors.append({"url": url, "strategy": strategy, "error": f"{type(exc).__name__}: {exc}", "source": "api"})
 
-            # Try local Lighthouse fallback if API failed and flag is set
-            if not api_success and args.local_lighthouse_fallback:
+            if not api_success and provider == "api_with_fallback":
                 try:
                     lh_result = run_local_lighthouse_fallback(url, strategy)
                     if lh_result is not None:
                         results.append(lh_result)
                         print(f"[pagespeed] Local Lighthouse succeeded for {url} ({strategy})", file=sys.stderr)
+                    else:
+                        errors.append({"url": url, "strategy": strategy, "error": "Local Lighthouse unavailable or failed", "source": "local_lighthouse"})
                 except Exception as lh_exc:
                     errors.append({"url": url, "strategy": strategy, "error": f"Local Lighthouse: {type(lh_exc).__name__}: {lh_exc}", "source": "local_lighthouse"})
 
     output = {
         "tested_urls": urls,
+        "provider": provider,
         "api_key_used": bool(api_key),
-        "local_lighthouse_fallback": args.local_lighthouse_fallback,
+        "local_lighthouse_fallback": provider == "api_with_fallback",
         "page_speed_endpoint": API_ENDPOINT,
         "attempts_per_request": MAX_ATTEMPTS,
         "results": results,
