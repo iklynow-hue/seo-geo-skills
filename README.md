@@ -30,6 +30,21 @@ ln -s "$PWD/skills/seo-geo-site-audit" ~/.agents/skills/seo-geo-site-audit
 
 For Claude Code, the skill also includes a local [CLAUDE.md](skills/seo-geo-site-audit/CLAUDE.md) entry file.
 
+## Quick Start
+
+The simplest way to try it:
+
+1. Clone this repo and link the skill folder.
+2. Open Codex or Claude Code.
+3. Paste:
+
+```text
+Use $seo-geo-site-audit to audit https://example.com
+```
+
+4. Answer the setup questions one by one.
+5. Let the wrapper run and review the generated artifacts.
+
 ## Use Cases
 
 Use `seo-geo-site-audit` when you want:
@@ -56,6 +71,13 @@ The skill is designed to ask setup questions one by one before crawling:
 4. HTML report on/off
 5. HTML report language, only if HTML output is enabled
 
+Recommended first test:
+
+- choose `Local Lighthouse`
+- keep the default output style
+- start with a fast check or template audit
+- turn HTML on if you want a shareable artifact
+
 Current performance choices:
 
 - `1. Local Lighthouse (recommended)`
@@ -69,6 +91,12 @@ If HTML output is enabled, the follow-up language choices are:
 - `2. Chinese`
 - `3. Other (type it in)`
 
+If the agent skips the setup questions, you can prompt it more explicitly:
+
+```text
+Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions one by one with numbered options for scope, output style, performance handling, HTML report, and report language before you begin.
+```
+
 ## Terminal Usage
 
 Use the wrapper for normal runs:
@@ -78,6 +106,17 @@ Use the wrapper for normal runs:
   https://example.com \
   --mode template \
   --output-style operator
+```
+
+Example with HTML output in Chinese:
+
+```bash
+~/.agents/skills/seo-geo-site-audit/scripts/audit-site \
+  https://example.com \
+  --mode template \
+  --output-style operator \
+  --html-report \
+  --report-language chinese
 ```
 
 Useful options:
@@ -121,9 +160,11 @@ See:
 
 Cloning and forking are welcome.
 
-Please do not open pull requests for this repository. The maintainer is not reviewing PRs right now.
+If you find this repo useful, a star is always appreciated.
 
-If you need to report a bug or suggest an improvement, open an issue instead.
+If you run into a bug or have a suggestion, feel free to open an issue.
+
+Pull requests are not being reviewed right now, so issues are the best way to reach the maintainer.
 
 ---
 
@@ -159,6 +200,21 @@ ln -s "$PWD/skills/seo-geo-site-audit" ~/.agents/skills/seo-geo-site-audit
 
 对于 Claude Code，这个技能也包含了本地入口文件 [CLAUDE.md](skills/seo-geo-site-audit/CLAUDE.md)。
 
+## 快速开始
+
+最简单的体验方式：
+
+1. 克隆仓库并链接技能目录。
+2. 打开 Codex 或 Claude Code。
+3. 粘贴这句：
+
+```text
+Use $seo-geo-site-audit to audit https://example.com
+```
+
+4. 按顺序回答配置问题。
+5. 等待包装脚本运行完成，并查看生成的产物。
+
 ## 适用场景
 
 当你需要以下能力时，可以使用 `seo-geo-site-audit`：
@@ -185,6 +241,13 @@ Use $seo-geo-site-audit to audit https://example.com
 4. 是否生成 HTML 报告
 5. 如果开启 HTML，询问报告语言
 
+第一次测试建议：
+
+- 优先选择 `Local Lighthouse`
+- 输出风格先保持默认
+- 先做 fast check 或 template audit
+- 如果你想拿到可分享的产物，可以打开 HTML 输出
+
 当前性能选项：
 
 - `1. Local Lighthouse (recommended)`
@@ -198,6 +261,12 @@ Use $seo-geo-site-audit to audit https://example.com
 - `2. Chinese`
 - `3. Other (type it in)`
 
+如果 agent 没有主动逐项提问，可以更明确地这样说：
+
+```text
+Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions one by one with numbered options for scope, output style, performance handling, HTML report, and report language before you begin.
+```
+
 ## 终端使用
 
 正常运行请使用包装脚本：
@@ -207,6 +276,17 @@ Use $seo-geo-site-audit to audit https://example.com
   https://example.com \
   --mode template \
   --output-style operator
+```
+
+中文 HTML 报告示例：
+
+```bash
+~/.agents/skills/seo-geo-site-audit/scripts/audit-site \
+  https://example.com \
+  --mode template \
+  --output-style operator \
+  --html-report \
+  --report-language chinese
 ```
 
 常用参数：
@@ -250,6 +330,8 @@ Use $seo-geo-site-audit to audit https://example.com
 
 欢迎 clone 和 fork。
 
-请不要为这个仓库提交 Pull Request，维护者目前没有时间审核 PR。
+如果你觉得这个仓库对你有帮助，欢迎顺手点一个 star。
 
-如果你想反馈 bug 或建议改进，请直接提交 issue。
+如果你遇到 bug，或者有改进建议，欢迎提交 issue。
+
+目前维护者没有时间审核 Pull Request，所以 issue 会是更合适的反馈方式。
