@@ -10,7 +10,7 @@ This skill works with both Codex and Claude Code for sampled SEO + GEO audits of
 - template-aware sampling
 - local Lighthouse by default
 - optional PageSpeed API support
-- optional bilingual HTML reporting
+- built-in HTML reporting in English or Chinese
 
 ## Install
 
@@ -44,6 +44,13 @@ Use $seo-geo-site-audit to audit https://example.com
 
 4. Answer the setup questions one by one.
 5. Let the wrapper run and review the generated artifacts.
+
+Current implementation limits to know up front:
+
+- crawl cap: `1` to `25` pages
+- audit presets: `fast=1`, `light=10`, `template=25`
+- PageSpeed / performance test URLs: default `5`, maximum `10`
+- built-in static HTML localization: English and Chinese
 
 ## Use Cases
 
@@ -91,6 +98,11 @@ If HTML output is enabled, the follow-up language choices are:
 - `2. Chinese`
 - `3. Other (type it in)`
 
+Code note:
+
+- the wrapper's built-in static HTML localization currently supports English and Chinese
+- if you pass another value to `--report-language`, the HTML artifact currently falls back to English
+
 If the agent skips the setup questions, you can prompt it more explicitly:
 
 ```text
@@ -121,15 +133,18 @@ Example with HTML output in Chinese:
 
 Useful options:
 
-- `--mode fast|light|template`
+- `--mode fast|light|template` which map to `1`, `10`, and `25` pages
 - `--max-pages 1-25`
 - `--output-style boss|operator|specialist`
+- `--max-pagespeed-urls 1-10`
 - `--pagespeed-provider local|api|api_with_fallback`
 - `--api-key YOUR_KEY`
+- `--prompt-pagespeed-key`
 - `--skip-pagespeed`
 - `--html-report`
 - `--report-language english|chinese`
 - `--fetcher auto|scrapling|lightpanda|agent_browser|urllib`
+- `--local-lighthouse-fallback` as a compatibility alias for `api_with_fallback`
 - `--auto-install-prereqs`
 - `--skip-prereq-check`
 - `--out-dir /path/to/output`
@@ -163,8 +178,6 @@ Cloning and forking are welcome.
 If you find this repo useful, a star is always appreciated.
 
 If you run into a bug or have a suggestion, feel free to open an issue.
-
-Pull requests are not being reviewed right now, so issues are the best way to reach the maintainer.
 
 ---
 
@@ -215,6 +228,13 @@ Use $seo-geo-site-audit to audit https://example.com
 4. 按顺序回答配置问题。
 5. 等待包装脚本运行完成，并查看生成的产物。
 
+当前实现的几个限制，建议先了解：
+
+- 抓取页数范围：`1` 到 `25`
+- 预设模式：`fast=1`、`light=10`、`template=25`
+- PageSpeed / 性能检测 URL 数：默认 `5`，最大 `10`
+- 内置静态 HTML 本地化目前支持英文和中文
+
 ## 适用场景
 
 当你需要以下能力时，可以使用 `seo-geo-site-audit`：
@@ -261,6 +281,11 @@ Use $seo-geo-site-audit to audit https://example.com
 - `2. Chinese`
 - `3. Other (type it in)`
 
+代码层面的当前说明：
+
+- 包装脚本内置的静态 HTML 本地化目前只支持英文和中文
+- 如果传入其他 `--report-language` 值，当前 HTML 产物会回退到英文
+
 如果 agent 没有主动逐项提问，可以更明确地这样说：
 
 ```text
@@ -291,15 +316,18 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 
 常用参数：
 
-- `--mode fast|light|template`
+- `--mode fast|light|template`，分别对应 `1`、`10`、`25` 页
 - `--max-pages 1-25`
 - `--output-style boss|operator|specialist`
+- `--max-pagespeed-urls 1-10`
 - `--pagespeed-provider local|api|api_with_fallback`
 - `--api-key YOUR_KEY`
+- `--prompt-pagespeed-key`
 - `--skip-pagespeed`
 - `--html-report`
 - `--report-language english|chinese`
 - `--fetcher auto|scrapling|lightpanda|agent_browser|urllib`
+- `--local-lighthouse-fallback`，作为 `api_with_fallback` 的兼容别名
 - `--auto-install-prereqs`
 - `--skip-prereq-check`
 - `--out-dir /path/to/output`
@@ -333,5 +361,3 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 如果你觉得这个仓库对你有帮助，欢迎顺手点一个 star。
 
 如果你遇到 bug，或者有改进建议，欢迎提交 issue。
-
-目前维护者没有时间审核 Pull Request，所以 issue 会是更合适的反馈方式。
