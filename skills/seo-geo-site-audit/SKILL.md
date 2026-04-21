@@ -1,6 +1,6 @@
 ---
 name: seo-geo-site-audit
-description: Run repeatable SEO and GEO website audits for public sites. Use when the user asks for an SEO audit, GEO audit, AI visibility review, technical content-readiness review, or a site-quality audit that should crawl a representative sample of up to 25 pages, review crawlability, metadata, internal linking, structured data, trust signals, and summarize mobile/desktop performance evidence from local Lighthouse or PageSpeed API results with scored sections, passed items, issues, and prioritized actions.
+description: Run repeatable SEO and GEO website audits for public sites. Use when the user asks for an SEO audit, GEO audit, AI visibility review, technical content-readiness review, or a site-quality audit that should crawl a representative sample of up to 50 pages, review crawlability, metadata, internal linking, structured data, trust signals, and summarize mobile/desktop performance evidence from local Lighthouse or PageSpeed API results with scored sections, passed items, issues, and prioritized actions.
 ---
 
 # SEO GEO Site Audit
@@ -90,7 +90,7 @@ PageSpeed API improvements:
 ## Guardrails
 
 - Treat the crawl as a **sample**, not a full index.
-- Default crawl cap is **25** pages. Maximum is **25** pages for this skill flow.
+- Default crawl cap is **50** pages. Maximum is **50** pages for this skill flow.
 - Stay on the same origin unless the user explicitly wants cross-domain review.
 - Separate **observed evidence** from **inference**.
 - Never imply access to Search Console, analytics, Ahrefs, SEMrush, or server logs unless the user actually provided them.
@@ -106,8 +106,8 @@ Choose the lightest mode that matches the request:
 
 - **Fast check** — `1` page
 - **Light template audit** — `10` pages
-- **Standard template audit** — `25` pages
-- **Custom sample** — user-chosen page cap up to `25`
+- **Standard template audit** — `50` pages
+- **Custom sample** — user-chosen page cap up to `50`
 
 Prefer template coverage over brute-force depth. A good audit sample usually includes:
 
@@ -145,11 +145,11 @@ Recommended setup sequence:
    `Choose the audit scope:`
    `1. Fast check (1 page)`
    `2. Light template audit (10 pages)`
-   `3. Standard template audit (25 pages, recommended and maximum)`
-   `4. Custom page cap up to 25`
+   `3. Standard template audit (50 pages, recommended and maximum)`
+   `4. Custom page cap up to 50`
 
    If the user chooses `4`, ask one follow-up before continuing:
-   `Reply with a crawl cap from 1 to 25.`
+   `Reply with a crawl cap from 1 to 50.`
 
 2. **Output style**
    Ask:
@@ -187,7 +187,7 @@ Recommended setup sequence:
 Recommended defaults you may suggest:
 
 - **Template audit**
-- **25** pages
+- **50** pages
 - **Operator** output
 - performance evidence via **local Lighthouse**
 - HTML report **off** unless requested
@@ -507,6 +507,6 @@ What it does:
 ## Example Requests
 
 - `Use $seo-geo-site-audit to audit https://example.com. Ask me to confirm the crawl setup first.`
-- `Run a standard SEO + GEO audit for https://example.com, use 25 pages, and generate the HTML report too.`
+- `Run a standard SEO + GEO audit for https://example.com, use 50 pages, and generate the HTML report too.`
 - `Audit this site for AI visibility and technical SEO. Ask whether I want local Lighthouse, skip, use an env API key, or paste a key in chat before you continue.`
 - `Audit this SPA site with JS rendering and local Lighthouse: https://www.mcmarkets.com`

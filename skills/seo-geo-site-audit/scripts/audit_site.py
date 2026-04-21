@@ -18,11 +18,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 CRAWL_SCRIPT = SCRIPT_DIR / "crawl_sample.py"
 PAGESPEED_SCRIPT = SCRIPT_DIR / "pagespeed_batch.py"
 DEFAULT_MAX_PAGESPEED_URLS = 5
-MAX_CRAWL_PAGES = 25
+MAX_CRAWL_PAGES = 50
 MODE_DEFAULTS = {
     "fast": 1,
     "light": 10,
-    "template": 25,
+    "template": 50,
 }
 
 LANGUAGE_PACKS = {
@@ -486,7 +486,7 @@ def write_html_report(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Run a one-command SEO/GEO site audit sample with up to 25 pages."
+        description="Run a one-command SEO/GEO site audit sample with up to 50 pages."
     )
     parser.add_argument("url", help="Target site URL, usually the homepage.")
     parser.add_argument(
@@ -495,7 +495,7 @@ def main() -> int:
         default="template",
         help="Audit depth preset. Default: template.",
     )
-    parser.add_argument("--max-pages", type=int, help="Override the crawl cap (1-25).")
+    parser.add_argument("--max-pages", type=int, help="Override the crawl cap (1-50).")
     parser.add_argument(
         "--output-style",
         choices=("boss", "operator", "specialist"),

@@ -6,7 +6,7 @@ Public skill repo for:
 
 This skill works with both Codex and Claude Code for sampled SEO + GEO audits of public sites, with:
 
-- capped crawling up to 25 pages
+- capped crawling up to 50 pages
 - template-aware sampling
 - local Lighthouse by default
 - optional PageSpeed API support
@@ -47,8 +47,8 @@ Use $seo-geo-site-audit to audit https://example.com
 
 Current implementation limits to know up front:
 
-- crawl cap: `1` to `25` pages
-- audit presets: `fast=1`, `light=10`, `template=25`
+- crawl cap: `1` to `50` pages
+- audit presets: `fast=1`, `light=10`, `template=50`
 - PageSpeed / performance test URLs: default `5`, maximum `10`
 - built-in static HTML localization: English and Chinese
 
@@ -133,8 +133,8 @@ Example with HTML output in Chinese:
 
 Useful options:
 
-- `--mode fast|light|template` which map to `1`, `10`, and `25` pages
-- `--max-pages 1-25`
+- `--mode fast|light|template` which map to `1`, `10`, and `50` pages
+- `--max-pages 1-50`
 - `--output-style boss|operator|specialist`
 - `--max-pagespeed-urls 1-10`
 - `--pagespeed-provider local|api|api_with_fallback`
@@ -189,7 +189,7 @@ If you run into a bug or have a suggestion, feel free to open an issue.
 
 这个技能同时适用于 Codex 和 Claude Code，用于对公开网站进行采样式 SEO + GEO 审核，支持：
 
-- 最多 25 页的上限抓取
+- 最多 50 页的上限抓取
 - 按模板类型抽样
 - 默认使用本地 Lighthouse
 - 可选接入 PageSpeed API
@@ -230,8 +230,8 @@ Use $seo-geo-site-audit to audit https://example.com
 
 当前实现的几个限制，建议先了解：
 
-- 抓取页数范围：`1` 到 `25`
-- 预设模式：`fast=1`、`light=10`、`template=25`
+- 抓取页数范围：`1` 到 `50`
+- 预设模式：`fast=1`、`light=10`、`template=50`
 - PageSpeed / 性能检测 URL 数：默认 `5`，最大 `10`
 - 内置静态 HTML 本地化目前支持英文和中文
 
@@ -316,8 +316,8 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 
 常用参数：
 
-- `--mode fast|light|template`，分别对应 `1`、`10`、`25` 页
-- `--max-pages 1-25`
+- `--mode fast|light|template`，分别对应 `1`、`10`、`50` 页
+- `--max-pages 1-50`
 - `--output-style boss|operator|specialist`
 - `--max-pagespeed-urls 1-10`
 - `--pagespeed-provider local|api|api_with_fallback`

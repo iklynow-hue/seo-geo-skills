@@ -56,7 +56,7 @@ def now_iso() -> str:
 
 
 def clamp_max_pages(value: int) -> int:
-    return max(1, min(25, value))
+    return max(1, min(50, value))
 
 
 def canonicalize_url(url: str) -> str:
@@ -803,7 +803,7 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
 def main() -> int:
     parser = argparse.ArgumentParser(description="Crawl a capped sample of site pages and extract SEO/GEO signals.")
     parser.add_argument("--url", required=True, help="Start URL, usually the homepage.")
-    parser.add_argument("--max-pages", type=int, default=25, help="Maximum pages to sample (1-25).")
+    parser.add_argument("--max-pages", type=int, default=50, help="Maximum pages to sample (1-50).")
     parser.add_argument("--user-agent", default=DEFAULT_UA, help="HTTP User-Agent header.")
     parser.add_argument("--fetcher", default="auto", choices=["auto", "scrapling", "lightpanda", "agent_browser", "urllib"],
                         help="Preferred fetcher. 'auto' tries Scrapling → Lightpanda → agent-browser → urllib.")

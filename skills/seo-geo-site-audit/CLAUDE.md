@@ -24,7 +24,7 @@ Security rules:
 
 Workflow summary:
 
-- Crawl a capped representative sample up to 25 pages.
+- Crawl a capped representative sample up to 50 pages.
 - Review technical SEO, on-page packaging, IA/internal linking, GEO extractability, EEAT/trust, structured data, and performance evidence.
 - Produce Operator mode by default unless the user asks for Boss or Specialist.
 - Treat all findings as sample-based evidence, not a complete site index.
