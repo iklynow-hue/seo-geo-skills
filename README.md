@@ -102,7 +102,9 @@ The skill is designed to ask setup questions one by one before crawling:
 2. Output style
 3. Performance evidence mode
 4. HTML report on/off
-5. Final output language, asked last before the report is written
+5. Final output language
+
+Language confirmation is mandatory for the skill flow. The audit should not proceed to the final report until the user confirms the language or explicitly accepts the default English.
 
 Default first test:
 
@@ -136,7 +138,7 @@ Language note:
 If the agent skips the setup questions, you can prompt it more explicitly:
 
 ```text
-Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions one by one with numbered options for scope, output style, performance handling, and HTML report before you begin, then ask the final output language last.
+Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions one by one with numbered options for scope, output style, performance handling, HTML report, and final output language before you begin.
 ```
 
 ## Terminal Usage
@@ -363,7 +365,7 @@ Use $seo-geo-site-audit to audit https://example.com
 如果 agent 没有主动逐项提问，可以更明确地这样说：
 
 ```text
-Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions one by one with numbered options for scope, output style, performance handling, and HTML report before you begin, then ask the final output language last.
+Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions one by one with numbered options for scope, output style, performance handling, HTML report, and final output language before you begin.
 ```
 
 ## 终端使用

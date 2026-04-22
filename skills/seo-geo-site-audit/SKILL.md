@@ -132,6 +132,7 @@ Confirm:
 - performance evidence mode:
   local Lighthouse, PageSpeed API from the skill `.env`, or skip
 - whether they want an HTML report
+- final output language
 
 Ask these questions **one by one**, not as a single block. Wait for the user's answer to each question before asking the next one.
 
@@ -173,6 +174,18 @@ Default setup sequence:
    `1. Off (default)`
    `2. On`
 
+5. **Final output language**
+   Ask:
+   `Choose the final output language:`
+   `1. English (default)`
+   `2. Chinese`
+   `3. Other (type it in)`
+
+   If the user chooses `3`, ask one more follow-up before continuing:
+   `Reply with the output language in the next message.`
+
+Language confirmation is **mandatory**. Do not treat the setup as complete until the user confirms the final report language or explicitly says to use the default English.
+
 Default values you may use if the user asks for defaults:
 
 - **Light template audit**
@@ -180,12 +193,15 @@ Default values you may use if the user asks for defaults:
 - **Operator** output
 - performance evidence via **local Lighthouse**
 - HTML report **off**
+- final output language **English**
 
 Do not start the crawl until the user confirms the setup or explicitly says to use the defaults.
 
+If the user has answered scope, output style, PageSpeed handling, and HTML report, but language is still missing, stop and ask the language question before you continue.
+
 If the agent fails to ask these questions on its own, the user should explicitly say:
 
-`Ask me the setup questions one by one with numbered options for scope, output style, PageSpeed handling, and HTML report before you begin.`
+`Ask me the setup questions one by one with numbered options for scope, output style, PageSpeed handling, HTML report, and final output language before you begin.`
 
 ### 2. Use the wrapper for all normal audits
 
@@ -261,9 +277,13 @@ Inspect:
 
 Use `references/scoring-rubric.md` for scoring rules.
 
-### 5. Ask for the final output language last
+### 5. Keep the output language explicit
 
-Once the crawl and evidence review are complete, ask the language question as the final interaction step before writing the report.
+The output language must always be explicitly confirmed with the user.
+
+If you already captured it during setup, keep using that confirmed language.
+
+If an earlier run reached evidence review without a language answer, ask the language question immediately before writing the report and do not silently default to English.
 
 Ask:
 `Choose the final output language:`
