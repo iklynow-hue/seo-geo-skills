@@ -171,7 +171,9 @@ def write_manifest(
     report_language: str,
     crawl_path: Path,
     pagespeed_path: Path | None,
-    html_report_path: Path | None,
+    evidence_report_path: Path | None,
+    final_report_json_path: Path | None,
+    final_report_html_path: Path | None,
 ) -> None:
     crawl = read_json(crawl_path)
     pages = crawl.get("pages", [])
@@ -186,7 +188,9 @@ def write_manifest(
         "pagespeed_path": str(pagespeed_path) if pagespeed_path else None,
         "pagespeed_provider": pagespeed.get("provider"),
         "report_language": report_language,
-        "html_report_path": str(html_report_path) if html_report_path else None,
+        "evidence_report_path": str(evidence_report_path) if evidence_report_path else None,
+        "final_report_json_path": str(final_report_json_path) if final_report_json_path else None,
+        "final_report_html_path": str(final_report_html_path) if final_report_html_path else None,
         "pages_sampled": len(pages),
         "pagespeed_urls_tested": pagespeed.get("tested_urls", []),
         "pagespeed_error_count": len(pagespeed.get("errors", [])) if pagespeed else 0,
@@ -203,6 +207,218 @@ def normalize_report_language(value: str | None) -> str:
 
 def get_language_pack(value: str | None) -> dict[str, str]:
     return LANGUAGE_PACKS[normalize_report_language(value)]
+
+
+def label_mode(mode: str, max_pages: int, report_language: str) -> str:
+    language = normalize_report_language(report_language)
+    if language == "zh":
+        return {
+            "fast": f"快速检查（{max_pages} 页）",
+            "light": f"轻量模板审核（{max_pages} 页）",
+            "template": f"标准模板审核（{max_pages} 页）",
+        }.get(mode, f"自定义样本（{max_pages} 页）")
+    return {
+        "fast": f"Fast check ({max_pages} page{'s' if max_pages != 1 else ''})",
+        "light": f"Light template audit ({max_pages} pages)",
+        "template": f"Standard template audit ({max_pages} pages)",
+    }.get(mode, f"Custom sample ({max_pages} pages)")
+
+
+def label_output_style(output_style: str, report_language: str) -> str:
+    language = normalize_report_language(report_language)
+    if language == "zh":
+        return {
+            "boss": "Boss",
+            "operator": "Operator",
+            "specialist": "Specialist",
+        }.get(output_style, output_style)
+    return output_style.title()
+
+
+def build_final_report_seed(
+    *,
+    target_url: str,
+    mode: str,
+    output_style: str,
+    max_pages: int,
+    report_language: str,
+    crawl_path: Path,
+    pagespeed_path: Path | None,
+    evidence_report_path: Path | None,
+    final_report_html_path: Path | None,
+) -> dict:
+    crawl = read_json(crawl_path)
+    pagespeed = read_json(pagespeed_path) if pagespeed_path and pagespeed_path.exists() else {}
+    summary = crawl.get("summary", {})
+    page_count = int(crawl.get("page_count", 0) or 0)
+    pagespeed_provider = pagespeed.get("provider")
+    pagespeed_errors = pagespeed.get("errors", [])
+    language = normalize_report_language(report_language)
+    if language == "zh":
+        title = "SEO + GEO 审核报告"
+        snapshot = [
+            {"label": "目标", "value": urlsplit(target_url).netloc or target_url},
+            {"label": "模式", "value": label_mode(mode, max_pages, report_language)},
+            {"label": "输出风格", "value": label_output_style(output_style, report_language)},
+            {"label": "置信度", "value": "待填写"},
+            {"label": "已采样页面", "value": str(page_count)},
+            {"label": "性能证据", "value": str(pagespeed_provider or "未收集")},
+        ]
+        intro = "请用最终输出语言写一句执行摘要，并补全下方各部分。"
+        overall = {
+            "score": "",
+            "band": "待填写",
+            "summary": "请在生成最终审核结论后填写总分说明。",
+        }
+        top_wins = ["请根据最终审核结论填写主要亮点。"]
+        top_issues = ["请根据最终审核结论填写主要问题。"]
+        method_notes = [
+            "这是一次采样式审核，不是全站完整爬取。",
+            f"当前包装脚本采样了 {page_count} 个页面。",
+        ]
+        if pagespeed_provider:
+            method_notes.append(f"当前性能证据来源：{pagespeed_provider}。")
+        if pagespeed_errors:
+            method_notes.append("PageSpeed 存在部分失败，请在最终结论中明确说明。")
+    else:
+        title = "SEO + GEO Audit Report"
+        snapshot = [
+            {"label": "Target", "value": urlsplit(target_url).netloc or target_url},
+            {"label": "Mode", "value": label_mode(mode, max_pages, report_language)},
+            {"label": "Output style", "value": label_output_style(output_style, report_language)},
+            {"label": "Confidence", "value": "Fill after scoring"},
+            {"label": "Pages sampled", "value": str(page_count)},
+            {"label": "Performance evidence", "value": str(pagespeed_provider or "Not collected")},
+        ]
+        intro = "Replace this with a one-line executive framing in the final output language and then complete every section below."
+        overall = {
+            "score": "",
+            "band": "Fill after scoring",
+            "summary": "Summarize the overall result after you finish the final audit.",
+        }
+        top_wins = ["Fill these after writing the final audit conclusions."]
+        top_issues = ["Fill these after writing the final audit conclusions."]
+        method_notes = [
+            "This audit is a sampled review, not a full-site crawl.",
+            f"The wrapper sampled {page_count} page(s) in this run.",
+        ]
+        if pagespeed_provider:
+            method_notes.append(f"Performance evidence currently comes from {pagespeed_provider}.")
+        if pagespeed_errors:
+            method_notes.append("PageSpeed recorded partial failures; mention that clearly in the final report.")
+
+    section_titles = [
+        "1. Technical SEO & Indexability" if language == "en" else "1. 技术 SEO 与可索引性",
+        "2. On-Page SEO & Content Packaging" if language == "en" else "2. 页面 SEO 与内容包装",
+        "3. Information Architecture & Internal Linking" if language == "en" else "3. 信息架构与内链",
+        "4. GEO & AI Extractability" if language == "en" else "4. GEO 与 AI 可提取性",
+        "5. EEAT & Trust Signals" if language == "en" else "5. EEAT 与信任信号",
+        "6. Entity & Structured Data" if language == "en" else "6. 实体与结构化数据",
+        "7. Performance & Page Experience" if language == "en" else "7. 性能与页面体验",
+    ]
+    section_scores = []
+    sections = []
+    weights = [20, 15, 10, 20, 15, 10, 10]
+    for title_value, weight in zip(section_titles, weights):
+        notes_value = "Fill after scoring." if language == "en" else "请在评分后填写。"
+        section_scores.append(
+            {
+                "section": title_value.split(". ", 1)[-1],
+                "score": "",
+                "weight": weight,
+                "weighted_score": "",
+                "notes": notes_value,
+            }
+        )
+        sections.append(
+            {
+                "title": title_value,
+                "score": "",
+                "passed_items": [],
+                "issues": [],
+                "evidence": [],
+                "recommended_actions": [],
+            }
+        )
+
+    pagespeed_conclusion = {
+        "mobile": {
+            "average_performance": "",
+            "pattern": "",
+            "largest_issues": [],
+        },
+        "desktop": {
+            "average_performance": "",
+            "pattern": "",
+            "largest_issues": [],
+        },
+        "note": "",
+    }
+    artifacts = [
+        {"label": "crawl.json", "path": str(crawl_path)},
+    ]
+    if pagespeed_path:
+        artifacts.append({"label": "pagespeed.json", "path": str(pagespeed_path)})
+    if evidence_report_path:
+        artifacts.append({"label": "evidence-report.html", "path": str(evidence_report_path)})
+    if final_report_html_path:
+        artifacts.append({"label": "audit-report.html", "path": str(final_report_html_path)})
+
+    payload = {
+        "title": title,
+        "target_url": target_url,
+        "language": report_language,
+        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "intro": intro,
+        "overall": overall,
+        "snapshot": snapshot,
+        "section_scores": section_scores,
+        "top_wins": top_wins,
+        "top_issues": top_issues,
+        "sections": sections,
+        "pagespeed_conclusion": pagespeed_conclusion,
+        "roadmap": {"P0": [], "P1": [], "P2": [], "P3": []},
+        "method_notes": method_notes,
+        "artifacts": artifacts,
+        "ui_text": {},
+    }
+    coverage_rates = summary.get("coverage_rates", {})
+    if coverage_rates:
+        coverage_parts = [f"{name}: {value}" for name, value in coverage_rates.items()]
+        payload["method_notes"].append(
+            ("Coverage rates: " if language == "en" else "覆盖率：") + ", ".join(coverage_parts)
+        )
+    return payload
+
+
+def write_final_report_seed(
+    final_report_json_path: Path,
+    *,
+    target_url: str,
+    mode: str,
+    output_style: str,
+    max_pages: int,
+    report_language: str,
+    crawl_path: Path,
+    pagespeed_path: Path | None,
+    evidence_report_path: Path | None,
+    final_report_html_path: Path | None,
+) -> None:
+    payload = build_final_report_seed(
+        target_url=target_url,
+        mode=mode,
+        output_style=output_style,
+        max_pages=max_pages,
+        report_language=report_language,
+        crawl_path=crawl_path,
+        pagespeed_path=pagespeed_path,
+        evidence_report_path=evidence_report_path,
+        final_report_html_path=final_report_html_path,
+    )
+    final_report_json_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def human_bool(value: bool, yes_label: str, no_label: str) -> str:
@@ -513,12 +729,12 @@ def main() -> int:
     parser.add_argument(
         "--html-report",
         action="store_true",
-        help="Write a static HTML report alongside the crawl and PageSpeed JSON files.",
+        help="Write an evidence HTML plus a seeded final-report.json alongside the crawl artifacts.",
     )
     parser.add_argument(
         "--report-language",
         default="english",
-        help="Language for the HTML report. Built-in localization currently supports English and Chinese.",
+        help="Language for the wrapper evidence HTML and seeded final-report.json. Built-in localization currently supports English and Chinese.",
     )
     parser.add_argument(
         "--pagespeed-provider",
@@ -530,8 +746,8 @@ def main() -> int:
     parser.add_argument(
         "--fetcher",
         default="auto",
-        choices=["auto", "scrapling", "lightpanda", "agent_browser", "urllib"],
-        help="Preferred fetcher for crawl. 'auto' tries Scrapling → Lightpanda → agent-browser → urllib.",
+        choices=["auto", "scrapling", "lightpanda", "agent_browser", "chrome", "urllib"],
+        help="Preferred fetcher for crawl. 'auto' tries Scrapling → Lightpanda → agent-browser → attached Chrome → urllib.",
     )
     parser.add_argument(
         "--local-lighthouse-fallback",
@@ -556,7 +772,9 @@ def main() -> int:
     crawl_path = out_dir / "crawl.json"
     pagespeed_path = out_dir / "pagespeed.json"
     manifest_path = out_dir / "audit-run.json"
-    html_report_path = out_dir / "audit-report.html" if args.html_report else None
+    evidence_report_path = out_dir / "evidence-report.html" if args.html_report else None
+    final_report_json_path = out_dir / "final-report.json" if args.html_report else None
+    final_report_html_path = out_dir / "audit-report.html" if args.html_report else None
 
     # Run prerequisite check. Auto-install is opt-in because it mutates the machine.
     if not args.skip_prereq_check:
@@ -617,9 +835,9 @@ def main() -> int:
             )
         pagespeed_path_out = pagespeed_path
 
-    if html_report_path:
+    if evidence_report_path:
         write_html_report(
-            html_report_path,
+            evidence_report_path,
             target_url=args.url,
             mode=args.mode,
             output_style=args.output_style,
@@ -627,6 +845,19 @@ def main() -> int:
             report_language=args.report_language,
             crawl_path=crawl_path,
             pagespeed_path=pagespeed_path_out,
+        )
+    if final_report_json_path:
+        write_final_report_seed(
+            final_report_json_path,
+            target_url=args.url,
+            mode=args.mode,
+            output_style=args.output_style,
+            max_pages=max_pages,
+            report_language=args.report_language,
+            crawl_path=crawl_path,
+            pagespeed_path=pagespeed_path_out,
+            evidence_report_path=evidence_report_path,
+            final_report_html_path=final_report_html_path,
         )
 
     write_manifest(
@@ -638,7 +869,9 @@ def main() -> int:
         report_language=args.report_language,
         crawl_path=crawl_path,
         pagespeed_path=pagespeed_path_out,
-        html_report_path=html_report_path,
+        evidence_report_path=evidence_report_path,
+        final_report_json_path=final_report_json_path,
+        final_report_html_path=final_report_html_path,
     )
 
     print(f"Audit artifacts saved to: {out_dir}")
@@ -647,10 +880,18 @@ def main() -> int:
         print(f"- PageSpeed JSON: {pagespeed_path_out}")
     else:
         print("- PageSpeed JSON: skipped")
-    if html_report_path:
-        print(f"- HTML report: {html_report_path}")
+    if evidence_report_path:
+        print(f"- Evidence HTML: {evidence_report_path}")
+    if final_report_json_path:
+        print(f"- Final report JSON seed: {final_report_json_path}")
+        print(f"- Final polished HTML target: {final_report_html_path}")
     print(f"- Run manifest: {manifest_path}")
     print(f"Recorded mode: {args.mode} ({max_pages} pages), output style: {args.output_style}")
+    if final_report_json_path:
+        print(
+            "Note: evidence-report.html is the wrapper's evidence view. "
+            "Fill final-report.json and run render-report-html to produce the polished audit-report.html."
+        )
     return 0
 
 

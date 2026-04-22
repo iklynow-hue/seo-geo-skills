@@ -1,0 +1,75 @@
+{
+  "title": "SEO + GEO Audit Report",
+  "target_url": "https://example.com",
+  "language": "english",
+  "generated_at": "2026-04-22T00:00:00Z",
+  "intro": "One-line executive framing in the selected output language.",
+  "overall": {
+    "score": 0,
+    "band": "Critical blockers",
+    "summary": "Short explanation of the score."
+  },
+  "snapshot": [
+    { "label": "Target", "value": "example.com" },
+    { "label": "Mode", "value": "Light (10 pages)" },
+    { "label": "Output style", "value": "Operator" },
+    { "label": "Confidence", "value": "Low" }
+  ],
+  "section_scores": [
+    {
+      "section": "Technical SEO & Indexability",
+      "score": 0,
+      "weight": 20,
+      "weighted_score": 0,
+      "notes": "Short note"
+    }
+  ],
+  "top_wins": [
+    "Win 1"
+  ],
+  "top_issues": [
+    "Issue 1"
+  ],
+  "sections": [
+    {
+      "title": "1. Technical SEO & Indexability",
+      "score": 0,
+      "passed_items": ["Pass 1"],
+      "issues": [
+        {
+          "severity": "P0",
+          "title": "Issue title",
+          "detail": "Why it matters and what is wrong."
+        }
+      ],
+      "evidence": ["Evidence 1"],
+      "recommended_actions": ["Action 1"]
+    }
+  ],
+  "pagespeed_conclusion": {
+    "mobile": {
+      "average_performance": "25/100",
+      "pattern": "Short pattern summary",
+      "largest_issues": ["Largest issue 1"]
+    },
+    "desktop": {
+      "average_performance": "30/100",
+      "pattern": "Short pattern summary",
+      "largest_issues": ["Largest issue 1"]
+    },
+    "note": "Optional note about lab data, CrUX, API failures, or fallback behavior."
+  },
+  "roadmap": {
+    "P0": ["Critical action"],
+    "P1": ["Major action"],
+    "P2": ["Important improvement"],
+    "P3": ["Polish item"]
+  },
+  "method_notes": [
+    "This audit is a sampled review, not a full crawl."
+  ],
+  "artifacts": [
+    { "label": "crawl.json", "path": "/tmp/site-audit-example/crawl.json" }
+  ],
+  "ui_text": {}
+}

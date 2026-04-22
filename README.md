@@ -10,7 +10,7 @@ This skill works with both Codex and Claude Code for sampled SEO + GEO audits of
 - template-aware sampling
 - local Lighthouse by default
 - PageSpeed API support through a skill-local `.env`
-- built-in HTML reporting in English or Chinese
+- final polished HTML reporting from the same structured content as the written audit
 
 ## Install
 
@@ -63,7 +63,7 @@ Current implementation limits to know up front:
 - audit presets: `fast=1`, `light=10`, `template=50`
 - default audit scope: `light=10`
 - PageSpeed / performance test URLs: default `5`, maximum `10`
-- built-in static HTML localization: English and Chinese
+- best-effort SPA route expansion is capped and still sample-based, not a full app crawler
 
 ## Use Cases
 
@@ -89,7 +89,7 @@ The skill is designed to ask setup questions one by one before crawling:
 2. Output style
 3. Performance evidence mode
 4. HTML report on/off
-5. HTML report language, only if HTML output is enabled
+5. Final output language, asked last before the report is written
 
 Default first test:
 
@@ -108,21 +108,22 @@ If you choose the API path, save the key in:
 
 - `skills/seo-geo-site-audit/.env`
 
-If HTML output is enabled, the follow-up language choices are:
+The final language choices are:
 
 - `1. English (default)`
 - `2. Chinese`
 - `3. Other (type it in)`
 
-Code note:
+Language note:
 
-- the wrapper's built-in static HTML localization currently supports English and Chinese
-- if you pass another value to `--report-language`, the HTML artifact currently falls back to English
+- the written audit and final polished HTML should use the same selected language
+- English and Chinese are first-class built-in options
+- for another language, the agent can still render the final report in that language by filling the structured report payload before rendering HTML
 
 If the agent skips the setup questions, you can prompt it more explicitly:
 
 ```text
-Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions one by one with numbered options for scope, output style, performance handling, HTML report, and report language before you begin.
+Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions one by one with numbered options for scope, output style, performance handling, and HTML report before you begin, then ask the final output language last.
 ```
 
 ## Terminal Usage
@@ -146,6 +147,14 @@ Example with HTML output in Chinese:
   --report-language chinese
 ```
 
+Then render the polished final HTML after you fill `final-report.json`:
+
+```bash
+~/.agents/skills/seo-geo-site-audit/scripts/render-report-html \
+  --report-json /tmp/site-audit-example.com-<stamp>/final-report.json \
+  --out /tmp/site-audit-example.com-<stamp>/audit-report.html
+```
+
 Useful options:
 
 - `--mode fast|light|template` which map to `1`, `10`, and `50` pages
@@ -153,11 +162,10 @@ Useful options:
 - `--output-style boss|operator|specialist`
 - `--max-pagespeed-urls 1-10`
 - `--pagespeed-provider local|api|api_with_fallback`
-- `--api-key YOUR_KEY` as a terminal-only override when needed
 - `--skip-pagespeed`
 - `--html-report`
-- `--report-language english|chinese`
-- `--fetcher auto|scrapling|lightpanda|agent_browser|urllib`
+- `--report-language english|chinese` for the wrapper's evidence HTML and seeded final report payload
+- `--fetcher auto|scrapling|lightpanda|agent_browser|chrome|urllib`
 - `--local-lighthouse-fallback` as a compatibility alias for `api_with_fallback`
 - `--auto-install-prereqs`
 - `--skip-prereq-check`
@@ -168,7 +176,16 @@ Artifacts:
 - `crawl.json`
 - `pagespeed.json` unless skipped
 - `audit-run.json`
-- `audit-report.html` when HTML output is enabled
+- `evidence-report.html` when HTML output is enabled
+- `final-report.json` as a seeded payload for the final polished report
+- `audit-report.html` after you render the final polished report from `final-report.json`
+
+Final HTML flow in the skill:
+
+1. The wrapper gathers crawl and performance evidence.
+2. The wrapper writes `evidence-report.html` and seeds `final-report.json`.
+3. The agent writes the final audit in the selected language and fills `final-report.json`.
+4. The renderer turns that payload into the final `audit-report.html`.
 
 ## Security
 
@@ -207,7 +224,7 @@ If you run into a bug or have a suggestion, feel free to open an issue.
 - 按模板类型抽样
 - 默认使用本地 Lighthouse
 - 通过技能目录下的 `.env` 接入 PageSpeed API
-- 可选双语 HTML 报告
+- 基于与终端报告相同结构内容生成最终 HTML 报告
 
 ## 安装
 
@@ -260,7 +277,7 @@ Use $seo-geo-site-audit to audit https://example.com
 - 预设模式：`fast=1`、`light=10`、`template=50`
 - 默认抓取范围：`light=10`
 - PageSpeed / 性能检测 URL 数：默认 `5`，最大 `10`
-- 内置静态 HTML 本地化目前支持英文和中文
+- SPA 的最佳努力扩展仍然是采样逻辑，不是完整应用爬虫
 
 ## 适用场景
 
@@ -286,7 +303,7 @@ Use $seo-geo-site-audit to audit https://example.com
 2. 输出风格
 3. 性能证据模式
 4. 是否生成 HTML 报告
-5. 如果开启 HTML，询问报告语言
+5. 最后再询问输出语言
 
 默认首次测试建议：
 
@@ -305,21 +322,22 @@ Use $seo-geo-site-audit to audit https://example.com
 
 - `skills/seo-geo-site-audit/.env`
 
-如果开启 HTML 输出，还会继续询问：
+最后的语言选项是：
 
 - `1. English (default)`
 - `2. Chinese`
 - `3. Other (type it in)`
 
-代码层面的当前说明：
+语言说明：
 
-- 包装脚本内置的静态 HTML 本地化目前只支持英文和中文
-- 如果传入其他 `--report-language` 值，当前 HTML 产物会回退到英文
+- 终端中的最终报告与最终 HTML 报告应该使用同一种语言
+- 英文和中文是内置的一等选项
+- 如果用户输入其他语言，agent 仍可先写结构化 `final-report.json`，再渲染出同语言 HTML
 
 如果 agent 没有主动逐项提问，可以更明确地这样说：
 
 ```text
-Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions one by one with numbered options for scope, output style, performance handling, HTML report, and report language before you begin.
+Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions one by one with numbered options for scope, output style, performance handling, and HTML report before you begin, then ask the final output language last.
 ```
 
 ## 终端使用
@@ -343,6 +361,14 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
   --report-language chinese
 ```
 
+补全 `final-report.json` 后，再渲染最终交付版 HTML：
+
+```bash
+~/.agents/skills/seo-geo-site-audit/scripts/render-report-html \
+  --report-json /tmp/site-audit-example.com-<stamp>/final-report.json \
+  --out /tmp/site-audit-example.com-<stamp>/audit-report.html
+```
+
 常用参数：
 
 - `--mode fast|light|template`，分别对应 `1`、`10`、`50` 页
@@ -350,11 +376,10 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 - `--output-style boss|operator|specialist`
 - `--max-pagespeed-urls 1-10`
 - `--pagespeed-provider local|api|api_with_fallback`
-- `--api-key YOUR_KEY`，仅作为终端临时覆盖时使用
 - `--skip-pagespeed`
 - `--html-report`
-- `--report-language english|chinese`
-- `--fetcher auto|scrapling|lightpanda|agent_browser|urllib`
+- `--report-language english|chinese`，用于包装脚本的证据页 HTML 和最终报告种子 JSON
+- `--fetcher auto|scrapling|lightpanda|agent_browser|chrome|urllib`
 - `--local-lighthouse-fallback`，作为 `api_with_fallback` 的兼容别名
 - `--auto-install-prereqs`
 - `--skip-prereq-check`
@@ -365,7 +390,16 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 - `crawl.json`
 - `pagespeed.json`，如果没有跳过
 - `audit-run.json`
-- `audit-report.html`，当启用 HTML 输出时生成
+- `evidence-report.html`，当启用 HTML 输出时生成
+- `final-report.json`，作为最终交付稿的种子结构
+- `audit-report.html`，在你用 `final-report.json` 渲染最终交付 HTML 后生成
+
+技能里的最终 HTML 流程：
+
+1. 包装脚本先收集抓取与性能证据。
+2. 包装脚本写出 `evidence-report.html`，并生成 `final-report.json` 种子。
+3. agent 用所选语言写出最终审核结论，并补全 `final-report.json`。
+4. 渲染器再将其转换为最终的 `audit-report.html`。
 
 ## 安全说明
 

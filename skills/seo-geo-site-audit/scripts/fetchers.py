@@ -420,20 +420,35 @@ def _fetch_lightpanda(url: str, timeout: int = FETCH_TIMEOUT) -> dict | None:
         return None
 
 
-def _fetch_agent_browser(url: str, timeout: int = FETCH_TIMEOUT) -> dict | None:
-    """Fetch with agent-browser CLI — Playwright-based headless browser."""
+def _run_agent_browser(command: list[str], *, timeout: int, auto_connect: bool = False) -> subprocess.CompletedProcess[str]:
+    cmd = ["agent-browser"]
+    if auto_connect:
+        cmd.append("--auto-connect")
+    cmd.extend(command)
+    return _run(cmd, timeout=timeout)
+
+
+def _fetch_agent_browser(url: str, timeout: int = FETCH_TIMEOUT, auto_connect: bool = False) -> dict | None:
+    """Fetch with agent-browser CLI — Playwright-based browser automation.
+
+    When auto_connect is True, agent-browser attaches to an existing Chrome
+    session if possible. This is helpful for localhost apps, authenticated
+    sessions, and router-heavy SPAs that are easier to inspect in the user's
+    active browser context.
+    """
     if not shutil.which("agent-browser"):
         return None
 
     try:
         # Open the page
-        _run(["agent-browser", "open", url], timeout=timeout)
+        _run_agent_browser(["open", url], timeout=timeout, auto_connect=auto_connect)
         # Wait for network idle
-        _run(["agent-browser", "wait", "--load", "networkidle"], timeout=timeout)
+        _run_agent_browser(["wait", "--load", "networkidle"], timeout=timeout, auto_connect=auto_connect)
         # Get the rendered HTML
-        result = _run(
-            ["agent-browser", "eval", "document.documentElement.outerHTML", "--json"],
+        result = _run_agent_browser(
+            ["eval", "document.documentElement.outerHTML", "--json"],
             timeout=15,
+            auto_connect=auto_connect,
         )
         if result.returncode != 0:
             print(f"[fetchers] agent-browser eval failed: {result.stderr}", file=sys.stderr)
@@ -464,13 +479,14 @@ def _fetch_agent_browser(url: str, timeout: int = FETCH_TIMEOUT) -> dict | None:
             "content_type": "text/html",
             "text": compact_html_for_analysis(html_text),
             "bytes": len(html_text.encode("utf-8", errors="replace")),
-            "fetcher": "agent_browser",
+            "fetcher": "chrome" if auto_connect else "agent_browser",
         }
     except subprocess.TimeoutExpired:
         print(f"[fetchers] agent-browser fetch timed out for {url}", file=sys.stderr)
         return None
     except Exception as exc:
-        print(f"[fetchers] agent-browser fetch error for {url}: {exc}", file=sys.stderr)
+        label = "attached Chrome" if auto_connect else "agent-browser"
+        print(f"[fetchers] {label} fetch error for {url}: {exc}", file=sys.stderr)
         return None
 
 
@@ -500,6 +516,7 @@ def fetch_rendered(
         "scrapling": lambda: _fetch_scrapling(url, timeout),
         "lightpanda": lambda: _fetch_lightpanda(url, timeout),
         "agent_browser": lambda: _fetch_agent_browser(url, timeout),
+        "chrome": lambda: _fetch_agent_browser(url, timeout, auto_connect=True),
         "urllib": lambda: _fetch_urllib(url, user_agent, timeout),
     }
 
@@ -514,7 +531,7 @@ def fetch_rendered(
         return _fetch_urllib(url, user_agent, timeout)
 
     # Auto mode: try each fetcher in priority order
-    for name in ("scrapling", "lightpanda", "agent_browser"):
+    for name in ("scrapling", "lightpanda", "agent_browser", "chrome"):
         handler = fetcher_map[name]
         result = handler()
         if result is not None:
@@ -643,7 +660,7 @@ def main() -> int:
     import argparse
     parser = argparse.ArgumentParser(description="Test the unified fetcher.")
     parser.add_argument("url", help="URL to fetch")
-    parser.add_argument("--fetcher", default="auto", choices=["auto", "scrapling", "lightpanda", "agent_browser", "urllib"])
+    parser.add_argument("--fetcher", default="auto", choices=["auto", "scrapling", "lightpanda", "agent_browser", "chrome", "urllib"])
     parser.add_argument("--check-prereqs", action="store_true", help="Only check prerequisites")
     parser.add_argument("--no-auto-install", action="store_true", help="Don't auto-install missing prerequisites")
     args = parser.parse_args()

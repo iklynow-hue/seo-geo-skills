@@ -132,7 +132,6 @@ Confirm:
 - performance evidence mode:
   local Lighthouse, PageSpeed API from the skill `.env`, or skip
 - whether they want an HTML report
-- if HTML output is on, the report language
 
 Ask these questions **one by one**, not as a single block. Wait for the user's answer to each question before asking the next one.
 
@@ -174,15 +173,6 @@ Default setup sequence:
    `1. Off (default)`
    `2. On`
 
-   If the user chooses `2`, ask one follow-up before continuing:
-   `Choose the HTML report language:`
-   `1. English (default)`
-   `2. Chinese`
-   `3. Other (type it in)`
-
-   If the user chooses `3`, ask one more follow-up before continuing:
-   `Reply with the output language in the next message.`
-
 Default values you may use if the user asks for defaults:
 
 - **Light template audit**
@@ -190,7 +180,6 @@ Default values you may use if the user asks for defaults:
 - **Operator** output
 - performance evidence via **local Lighthouse**
 - HTML report **off**
-- if HTML is on, report language **English**
 
 Do not start the crawl until the user confirms the setup or explicitly says to use the defaults.
 
@@ -256,7 +245,8 @@ The wrapper can create:
 - `crawl.json`
 - `pagespeed.json`
 - `audit-run.json`
-- `audit-report.html` when `--html-report` is enabled
+- `evidence-report.html` when `--html-report` is enabled
+- `final-report.json` as a seeded structured payload when `--html-report` is enabled
 
 Inspect:
 
@@ -271,7 +261,30 @@ Inspect:
 
 Use `references/scoring-rubric.md` for scoring rules.
 
-### 5. Score the audit
+### 5. Ask for the final output language last
+
+Once the crawl and evidence review are complete, ask the language question as the final interaction step before writing the report.
+
+Ask:
+`Choose the final output language:`
+`1. English (default)`
+`2. Chinese`
+`3. Other (type it in)`
+
+If the user chooses `3`, ask one more follow-up:
+`Reply with the output language in the next message.`
+
+This language controls:
+
+- the written audit in chat
+- the structured final report payload
+- the final HTML report if HTML output is on
+
+For **English** and **Chinese**, the HTML renderer has built-in chrome labels.
+
+For any **other language**, keep the written report in that language and also populate `ui_text` in the final report payload so the HTML chrome matches the same language instead of falling back to English.
+
+### 6. Score the audit
 
 Read `references/scoring-rubric.md` before assigning scores.
 
@@ -294,9 +307,10 @@ Rules:
 - Reward consistent structural wins across templates.
 - If the audit sample is small, explicitly say confidence is lower.
 
-### 6. Write the report
+### 7. Write the report
 
 Read `references/report-template.md` and follow it closely.
+If HTML output is on, also read `references/report-payload-template.json`.
 
 Every section must include:
 
@@ -313,17 +327,27 @@ Every issue should include:
 - why it matters
 - what to fix
 
-If the user requested HTML output, mention the generated `audit-report.html` path in the final response in addition to the written audit.
-
 Keep the final written audit in the selected output language.
-
-When HTML output is enabled, also pass the selected language to the wrapper with `--report-language`.
-
-Built-in static HTML localization currently supports **English** and **Chinese** directly.
 
 If the audit used local Lighthouse, explicitly say the performance evidence is lab-based and does not include CrUX field data.
 
 If the audit used API mode and PageSpeed results were partial or failed, explicitly say that in the final result and tell the user they can rerun with `--pagespeed-provider api_with_fallback` or switch to local Lighthouse.
+
+If HTML output is enabled:
+
+1. Write the final written audit in chat first.
+2. Start from the wrapper-generated `final-report.json` in the same output directory, or build it there if it is missing, following `references/report-payload-template.json`.
+3. Render the polished HTML report by running:
+
+```bash
+/Users/klyment/.agents/skills/seo-geo-site-audit/scripts/render-report-html \
+  --report-json /tmp/site-audit-<host>-<stamp>/final-report.json \
+  --out /tmp/site-audit-<host>-<stamp>/audit-report.html
+```
+
+4. Mention the generated `audit-report.html` path in the final response in addition to the written audit.
+
+The final HTML report should match the written audit in substance, not just the crawl evidence page.
 
 ## Output Modes
 
@@ -442,8 +466,11 @@ Include everything in Operator mode plus:
 - `scripts/pagespeed_batch.py` — mobile / desktop PageSpeed collection + local Lighthouse fallback
 - `scripts/audit_site.py` — one-command wrapper for crawl + PageSpeed artifacts
 - `scripts/audit-site` — executable launcher for the wrapper
+- `scripts/render_report_html.py` — polished final report HTML renderer from structured JSON
+- `scripts/render-report-html` — executable launcher for the final report renderer
 - `references/scoring-rubric.md` — scoring rules and weights
 - `references/report-template.md` — output skeleton
+- `references/report-payload-template.json` — structured payload template for final HTML rendering
 
 ## Wrapper Command
 
@@ -460,9 +487,9 @@ For a simpler CLI flow, use the wrapper script:
 
 | Flag | Description |
 |---|---|
-| `--fetcher auto\|scrapling\|lightpanda\|agent_browser\|urllib` | Preferred fetcher. Default: `auto` (tries all in priority order) |
+| `--fetcher auto\|scrapling\|lightpanda\|agent_browser\|chrome\|urllib` | Preferred fetcher. Default: `auto` (tries all in priority order, including attached Chrome) |
 | `--pagespeed-provider local\|api\|api_with_fallback` | Performance evidence source. Default: `local` |
-| `--report-language <language>` | HTML report language. Built-in localization supports English and Chinese |
+| `--report-language <language>` | Wrapper evidence HTML language and seeded `final-report.json` language. The final polished report HTML should come from `final-report.json` + `render-report-html` |
 | `--local-lighthouse-fallback` | Compatibility alias for `--pagespeed-provider api_with_fallback` |
 | `--skip-prereq-check` | Skip prerequisite detection |
 | `--auto-install-prereqs` | Auto-install missing fetcher prerequisites |
@@ -496,16 +523,18 @@ What it does:
 - checks which optional fetcher prerequisites are available
 - can auto-install missing prerequisites only if `--auto-install-prereqs` is supplied
 - runs the capped crawl with JS rendering via the fetcher priority chain
+- escalates from headless fetchers to attached Chrome in `auto` mode when needed
+- makes a best-effort route expansion pass for router-heavy SPAs when rendered content exists but crawlable links are sparse
 - detects SPA shells and reports `spa_detection` per page
 - runs representative mobile + desktop performance checks unless `--skip-pagespeed` is used
 - uses local Lighthouse by default, or API / API-with-fallback when explicitly selected
-- can write `audit-report.html` when `--html-report` is supplied
-- can localize the static HTML artifact in English or Chinese via `--report-language`
+- can write `evidence-report.html` and seed `final-report.json` when `--html-report` is supplied
+- can render the final polished `audit-report.html` from `final-report.json`
 - stores `crawl.json`, `pagespeed.json`, `audit-run.json`, and any HTML report together in one output folder under `/tmp` by default
 
 ## Example Requests
 
 - `Use $seo-geo-site-audit to audit https://example.com. Ask me to confirm the crawl setup first.`
 - `Run a standard SEO + GEO audit for https://example.com, use 50 pages, and generate the HTML report too.`
-- `Audit this site for AI visibility and technical SEO. Ask whether I want local Lighthouse, skip, use an env API key, or paste a key in chat before you continue.`
+- `Audit this site for AI visibility and technical SEO. Ask whether I want local Lighthouse, skip, or use the skill .env for PageSpeed API before you continue. Ask the output language last.`
 - `Audit this SPA site with JS rendering and local Lighthouse: https://www.mcmarkets.com`

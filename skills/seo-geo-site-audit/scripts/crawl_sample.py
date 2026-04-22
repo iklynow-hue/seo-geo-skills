@@ -49,6 +49,35 @@ BINARY_EXTENSIONS = {
     ".atom",
 }
 SKIP_SCHEMES = {"mailto", "tel", "javascript", "data"}
+COMMON_ROUTE_GUESSES = (
+    "about",
+    "about-us",
+    "company",
+    "contact",
+    "support",
+    "help",
+    "faq",
+    "docs",
+    "documentation",
+    "guides",
+    "pricing",
+    "plans",
+    "fees",
+    "security",
+    "privacy",
+    "terms",
+    "legal",
+    "blog",
+    "news",
+    "learn",
+    "markets",
+    "trade",
+    "swap",
+    "portfolio",
+    "earn",
+    "vault",
+    "points",
+)
 
 
 def now_iso() -> str:
@@ -145,6 +174,36 @@ def title_priority(url: str, homepage: str) -> tuple:
     depth = len([p for p in parsed.path.split("/") if p])
     has_query = 1 if parsed.query else 0
     return (order.get(template, 99), depth, has_query, url)
+
+
+def guess_locale_prefix(url: str) -> str:
+    parts = [segment for segment in urllib.parse.urlsplit(url).path.split("/") if segment]
+    if not parts:
+        return ""
+    first = parts[0].lower()
+    if re.fullmatch(r"[a-z]{2}(?:-[a-z]{2})?", first):
+        return f"/{first}"
+    return ""
+
+
+def build_route_guesses(start_url: str, page: dict) -> list[str]:
+    parsed = urllib.parse.urlsplit(start_url)
+    site_root = f"{parsed.scheme}://{parsed.netloc}"
+    final_url = canonicalize_url(page.get("url", start_url))
+    locale_prefix = guess_locale_prefix(final_url)
+    guesses: list[str] = []
+
+    canonical = page.get("canonical") or ""
+    if canonical:
+        guesses.append(canonicalize_url(canonical))
+
+    for route in COMMON_ROUTE_GUESSES:
+        for prefix in ("", locale_prefix):
+            path = f"{prefix}/{route}" if prefix else f"/{route}"
+            guesses.append(canonicalize_url(urllib.parse.urljoin(site_root, path)))
+
+    start_canonical = canonicalize_url(start_url)
+    return list(dict.fromkeys(url for url in guesses if same_origin(start_url, url) and url != start_canonical))
 
 
 class PageParser(HTMLParser):
@@ -700,6 +759,10 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
     seen = set()
     pages = []
     bfs_discovered = 0
+    route_guess_candidates_considered = 0
+    route_guess_pages_enqueued = 0
+    best_effort_route_guessing_used = False
+    browser_escalation_used = False
 
     while queue and len(pages) < max_pages:
         current = queue.popleft()
@@ -783,6 +846,46 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
                 queue.append(link)
                 bfs_discovered += 1
 
+        needs_browser_escalation = (
+            preferred_fetcher == "auto"
+            and current == canonicalize_url(start_url)
+            and len(pages) == 1
+            and page.get("fetcher") == "agent_browser"
+            and not discovered_links
+            and (
+                page.get("word_count", 0) < 40
+                or not page.get("title")
+                or page.get("spa_detection", {}).get("needs_js_rendering", False)
+            )
+        )
+        if needs_browser_escalation:
+            browser_escalation_used = True
+            try:
+                chrome_page, chrome_links = analyze_page(current, user_agent, start_url, preferred_fetcher="chrome")
+                if chrome_page.get("word_count", 0) > page.get("word_count", 0) or len(chrome_links) > len(discovered_links):
+                    pages[-1] = chrome_page
+                    page = chrome_page
+                    discovered_links = chrome_links
+                    for link in discovered_links:
+                        if link not in seen and link not in queue:
+                            queue.append(link)
+                            bfs_discovered += 1
+            except Exception:
+                pass
+
+        has_rendered_content = bool(page.get("title")) or page.get("word_count", 0) >= 80
+        browser_backed_fetch = page.get("fetcher") in {"scrapling", "lightpanda", "agent_browser", "chrome"}
+        stalled_discovery = len(pages) == 1 and not discovered_links and not queue
+        if browser_backed_fetch and has_rendered_content and stalled_discovery:
+            guesses = build_route_guesses(start_url, page)[: max(4, min(max_pages * 3, 12))]
+            if guesses:
+                best_effort_route_guessing_used = True
+                route_guess_candidates_considered += len(guesses)
+                for guess in guesses:
+                    if guess not in seen and guess not in queue:
+                        queue.append(guess)
+                        route_guess_pages_enqueued += 1
+
     result = {
         "target_url": start_url,
         "fetched_at": now_iso(),
@@ -794,7 +897,11 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
         "notes": {
             "sitemap_candidates_considered": len(sitemap_candidates),
             "bfs_discovered_links": bfs_discovered,
-            "sample_is_page_capped": True,
+            "best_effort_route_guessing_used": best_effort_route_guessing_used,
+            "route_guess_candidates_considered": route_guess_candidates_considered,
+            "route_guess_pages_enqueued": route_guess_pages_enqueued,
+            "browser_escalation_used": browser_escalation_used,
+            "sample_is_page_capped": len(pages) >= max_pages,
         },
     }
     return result
@@ -805,8 +912,8 @@ def main() -> int:
     parser.add_argument("--url", required=True, help="Start URL, usually the homepage.")
     parser.add_argument("--max-pages", type=int, default=50, help="Maximum pages to sample (1-50).")
     parser.add_argument("--user-agent", default=DEFAULT_UA, help="HTTP User-Agent header.")
-    parser.add_argument("--fetcher", default="auto", choices=["auto", "scrapling", "lightpanda", "agent_browser", "urllib"],
-                        help="Preferred fetcher. 'auto' tries Scrapling → Lightpanda → agent-browser → urllib.")
+    parser.add_argument("--fetcher", default="auto", choices=["auto", "scrapling", "lightpanda", "agent_browser", "chrome", "urllib"],
+                        help="Preferred fetcher. 'auto' tries Scrapling → Lightpanda → agent-browser → attached Chrome → urllib.")
     parser.add_argument("--out", help="Optional JSON output file.")
     args = parser.parse_args()
 

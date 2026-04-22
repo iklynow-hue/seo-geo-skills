@@ -10,10 +10,11 @@ Default operating rules:
 - Prefer `--pagespeed-provider local` by default.
 - Only use PageSpeed API when the user explicitly chooses it.
 - If the user wants PageSpeed API mode, ask them to save the key in `/Users/klyment/.agents/skills/seo-geo-site-audit/.env` first, then continue.
-- If HTML output is enabled, ask one extra question for report language:
+- Ask the output language as the final question after crawl/evidence review, before writing the report:
   `1. English (default)`
   `2. Chinese`
   `3. Other (type it in)`
+- If HTML output is enabled, use the wrapper-generated `final-report.json` seed (or create it if missing), then render the final `audit-report.html` from it so the HTML matches the written report.
 
 Security rules:
 
@@ -25,6 +26,7 @@ Security rules:
 Workflow summary:
 
 - Crawl a capped representative sample up to 50 pages.
+- For router-heavy SPAs or local apps, use best-effort browser discovery before settling for a weak one-page sample.
 - Review technical SEO, on-page packaging, IA/internal linking, GEO extractability, EEAT/trust, structured data, and performance evidence.
 - Produce Operator mode by default unless the user asks for Boss or Specialist.
 - Treat all findings as sample-based evidence, not a complete site index.
