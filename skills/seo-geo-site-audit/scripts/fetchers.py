@@ -10,9 +10,11 @@ Fetcher priority chain:
 from __future__ import annotations
 
 import gzip
+import html
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -250,6 +252,67 @@ def detect_spa_shell(html_text: str, word_count: int, script_count: int) -> dict
     }
 
 
+def compact_html_for_analysis(html_text: str) -> str:
+    """Keep enough head metadata plus the start of <body> for parser-friendly analysis.
+
+    Some SPA pages inject enormous inline styles into <head>. Truncating the raw
+    HTML at MAX_BODY_CHARS can otherwise cut away the entire <body>, which makes
+    the crawler think the rendered page has zero links, zero headings, and zero
+    visible text.
+    """
+    if len(html_text) <= MAX_BODY_CHARS:
+        return html_text
+
+    lower = html_text.lower()
+    body_start = lower.find("<body")
+    if body_start == -1:
+        return html_text[:MAX_BODY_CHARS]
+
+    lang_match = re.search(r"<html[^>]*\blang=['\"]([^'\"]+)['\"]", html_text, re.IGNORECASE)
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", html_text, re.IGNORECASE | re.DOTALL)
+    desc_match = re.search(
+        r"<meta[^>]+name=['\"]description['\"][^>]+content=['\"]([^'\"]*)['\"]",
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    ) or re.search(
+        r"<meta[^>]+content=['\"]([^'\"]*)['\"][^>]+name=['\"]description['\"]",
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    canonical_match = re.search(
+        r"<link[^>]+rel=['\"]canonical['\"][^>]+href=['\"]([^'\"]+)['\"]",
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    ) or re.search(
+        r"<link[^>]+href=['\"]([^'\"]+)['\"][^>]+rel=['\"]canonical['\"]",
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    lang = lang_match.group(1).strip() if lang_match else ""
+    title = title_match.group(1).strip() if title_match else ""
+    meta_description = desc_match.group(1).strip() if desc_match else ""
+    canonical = canonical_match.group(1).strip() if canonical_match else ""
+
+    lang_attr = f' lang="{html.escape(lang)}"' if lang else ""
+    synthetic_head = ["<!doctype html>", f"<html{lang_attr}>", "<head>"]
+    synthetic_head.append('<meta charset="utf-8">')
+    if title:
+        synthetic_head.append(f"<title>{html.escape(title)}</title>")
+    if meta_description:
+        synthetic_head.append(
+            f'<meta name="description" content="{html.escape(meta_description, quote=True)}">'
+        )
+    if canonical:
+        synthetic_head.append(f'<link rel="canonical" href="{html.escape(canonical, quote=True)}">')
+    synthetic_head.append("</head>")
+    head_prefix = "".join(synthetic_head)
+
+    remaining = max(1024, MAX_BODY_CHARS - len(head_prefix) - len("</html>"))
+    body_chunk = html_text[body_start : body_start + remaining]
+    return f"{head_prefix}{body_chunk}</html>"
+
+
 # ---------------------------------------------------------------------------
 # Fetcher implementations
 # ---------------------------------------------------------------------------
@@ -308,7 +371,7 @@ def _fetch_scrapling(url: str, timeout: int = FETCH_TIMEOUT) -> dict | None:
             "status": status_code,
             "headers": {},
             "content_type": "text/html",
-            "text": html_text[:MAX_BODY_CHARS],
+            "text": compact_html_for_analysis(html_text),
             "bytes": len(html_text.encode("utf-8", errors="replace")),
             "fetcher": "scrapling",
         }
@@ -345,7 +408,7 @@ def _fetch_lightpanda(url: str, timeout: int = FETCH_TIMEOUT) -> dict | None:
             "status": 200,
             "headers": {},
             "content_type": "text/html",
-            "text": html_text[:MAX_BODY_CHARS],
+            "text": compact_html_for_analysis(html_text),
             "bytes": len(html_text.encode("utf-8", errors="replace")),
             "fetcher": "lightpanda",
         }
@@ -399,7 +462,7 @@ def _fetch_agent_browser(url: str, timeout: int = FETCH_TIMEOUT) -> dict | None:
             "status": 200,
             "headers": {},
             "content_type": "text/html",
-            "text": html_text[:MAX_BODY_CHARS],
+            "text": compact_html_for_analysis(html_text),
             "bytes": len(html_text.encode("utf-8", errors="replace")),
             "fetcher": "agent_browser",
         }
