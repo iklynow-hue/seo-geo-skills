@@ -12,9 +12,9 @@ This repository is intended to be safe for public publishing.
 
 Supported runtime sources:
 
+- the skill-local `.env` file in this directory
 - `PAGESPEED_API_KEY`
 - `GOOGLE_API_KEY`
-- a one-off key provided by the user during the current session
 
 Unsupported storage locations:
 
@@ -34,4 +34,3 @@ Before publishing:
 - search the repo for accidental keys or tokens
 - confirm sample outputs do not contain secrets
 - confirm generated artifacts are excluded or sanitized
-- rotate any key that was ever pasted into chat during testing

@@ -9,8 +9,9 @@ Default operating rules:
   `/Users/klyment/.agents/skills/seo-geo-site-audit/scripts/audit-site`
 - Prefer `--pagespeed-provider local` by default.
 - Only use PageSpeed API when the user explicitly chooses it.
+- If the user wants PageSpeed API mode, ask them to save the key in `/Users/klyment/.agents/skills/seo-geo-site-audit/.env` first, then continue.
 - If HTML output is enabled, ask one extra question for report language:
-  `1. English`
+  `1. English (default)`
   `2. Chinese`
   `3. Other (type it in)`
 
@@ -18,8 +19,7 @@ Security rules:
 
 - Never hardcode API keys, tokens, or secrets in this repo.
 - Never write PageSpeed API keys to tracked files, generated artifacts, docs, templates, or examples.
-- Only accept a PageSpeed API key from runtime environment variables or from the user's current chat/session.
-- If the user pastes a key in chat, use it only for that run and remind them to rotate it afterward.
+- Only accept a PageSpeed API key from the skill-local `.env` file or runtime environment variables.
 - Do not include raw keys in error messages, logs, manifests, or saved JSON/HTML outputs.
 
 Workflow summary:

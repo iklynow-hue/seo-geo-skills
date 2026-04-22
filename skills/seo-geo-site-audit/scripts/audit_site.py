@@ -492,8 +492,8 @@ def main() -> int:
     parser.add_argument(
         "--mode",
         choices=sorted(MODE_DEFAULTS),
-        default="template",
-        help="Audit depth preset. Default: template.",
+        default="light",
+        help="Audit depth preset. Default: light.",
     )
     parser.add_argument("--max-pages", type=int, help="Override the crawl cap (1-50).")
     parser.add_argument(
@@ -527,11 +527,6 @@ def main() -> int:
         help="Performance evidence source. Default: local Lighthouse.",
     )
     parser.add_argument("--api-key", help="Google PageSpeed Insights API key.")
-    parser.add_argument(
-        "--prompt-pagespeed-key",
-        action="store_true",
-        help="Prompt securely for the PageSpeed API key if one is not already set.",
-    )
     parser.add_argument(
         "--fetcher",
         default="auto",
@@ -605,8 +600,6 @@ def main() -> int:
         ]
         if args.api_key:
             pagespeed_cmd.extend(["--api-key", args.api_key])
-        if args.prompt_pagespeed_key:
-            pagespeed_cmd.append("--prompt-api-key")
         pagespeed_result = run_command(pagespeed_cmd, check=False)
         if pagespeed_result.stdout:
             print(pagespeed_result.stdout, end="")

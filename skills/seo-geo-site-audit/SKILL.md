@@ -98,7 +98,7 @@ PageSpeed API improvements:
 - Before running any crawl, do a short setup check when the user has not already specified scope. Do **not** silently pick crawl size, PageSpeed behavior, or HTML output and continue.
 - Never hardcode API keys, tokens, or secrets in this repo.
 - Never store a PageSpeed API key in tracked files, generated artifacts, manifests, or HTML output.
-- Only accept a PageSpeed API key from environment variables or the user's current chat/session.
+- Only accept a PageSpeed API key from the skill `.env` file or environment variables.
 
 ## Audit Modes
 
@@ -130,22 +130,22 @@ Confirm:
 - mode and crawl cap
 - output style: **Boss**, **Operator**, or **Specialist**
 - performance evidence mode:
-  local Lighthouse, existing env API key, pasted API key, or skip
-- whether they want an optional HTML artifact
+  local Lighthouse, PageSpeed API from the skill `.env`, or skip
+- whether they want an HTML report
 - if HTML output is on, the report language
 
 Ask these questions **one by one**, not as a single block. Wait for the user's answer to each question before asking the next one.
 
 Use numbered choices so the user can answer with `1`, `2`, `3`, or `4`.
 
-Recommended setup sequence:
+Default setup sequence:
 
 1. **Scope**
    Ask:
    `Choose the audit scope:`
    `1. Fast check (1 page)`
-   `2. Light template audit (10 pages)`
-   `3. Standard template audit (50 pages, recommended and maximum)`
+   `2. Light template audit (10 pages, default)`
+   `3. Standard template audit (50 pages)`
    `4. Custom page cap up to 50`
 
    If the user chooses `4`, ask one follow-up before continuing:
@@ -154,44 +154,43 @@ Recommended setup sequence:
 2. **Output style**
    Ask:
    `Choose the output style:`
-   `1. Operator (recommended)`
+   `1. Operator (default)`
    `2. Boss`
    `3. Specialist`
 
 3. **PageSpeed**
    Ask:
    `Choose PageSpeed handling:`
-   `1. Local Lighthouse (recommended)`
+   `1. Local Lighthouse (default)`
    `2. Skip PageSpeed`
-   `3. Use existing PageSpeed API key from env`
-   `4. I will paste the API key in chat`
+   `3. Use PageSpeed API from the skill .env`
 
-   If the user chooses `4`, ask one follow-up before continuing:
-   `Reply with your API key in the next message.`
+   If the user chooses `3`, ask one follow-up before continuing:
+   `Save your key to /Users/klyment/.agents/skills/seo-geo-site-audit/.env as PAGESPEED_API_KEY=your_key and tell me when it is ready.`
 
 4. **HTML report**
    Ask:
-   `Do you want the optional HTML report?`
-   `1. Off (recommended)`
+   `Do you want the HTML report?`
+   `1. Off (default)`
    `2. On`
 
    If the user chooses `2`, ask one follow-up before continuing:
    `Choose the HTML report language:`
-   `1. English (recommended)`
+   `1. English (default)`
    `2. Chinese`
    `3. Other (type it in)`
 
    If the user chooses `3`, ask one more follow-up before continuing:
    `Reply with the output language in the next message.`
 
-Recommended defaults you may suggest:
+Default values you may use if the user asks for defaults:
 
-- **Template audit**
-- **50** pages
+- **Light template audit**
+- **10** pages
 - **Operator** output
 - performance evidence via **local Lighthouse**
-- HTML report **off** unless requested
-- if HTML is on, report language **English** unless the user asks otherwise
+- HTML report **off**
+- if HTML is on, report language **English**
 
 Do not start the crawl until the user confirms the setup or explicitly says to use the defaults.
 
@@ -207,10 +206,10 @@ Do not run the lower-level crawl and PageSpeed scripts directly during a standar
 
 Why the wrapper is required:
 
-- it keeps the crawl, PageSpeed output, manifest, and optional HTML report together
+- it keeps the crawl, PageSpeed output, manifest, and HTML report together
 - it gives one consistent execution path for Codex, Claude, and terminal usage
 
-Template audit with optional HTML:
+Template audit with HTML:
 
 ```bash
 /Users/klyment/.agents/skills/seo-geo-site-audit/scripts/audit-site \
@@ -230,7 +229,7 @@ If the user does not want PageSpeed:
   --skip-pagespeed
 ```
 
-If the user pastes an API key in chat, still use the wrapper and pass that key to it with `--api-key`.
+If the user wants PageSpeed API mode, have them save the key in `/Users/klyment/.agents/skills/seo-geo-site-audit/.env` first and then continue through the wrapper.
 
 ### 3. Handle performance evidence expectations explicitly
 
@@ -238,16 +237,16 @@ The wrapper defaults to **local Lighthouse** for performance evidence.
 
 If the user explicitly chooses PageSpeed API, the PageSpeed script uses the official PageSpeed Insights API.
 
-- It tries `PAGESPEED_API_KEY` first, then `GOOGLE_API_KEY`.
+- It tries `/Users/klyment/.agents/skills/seo-geo-site-audit/.env` first.
+- Inside that file, it looks for `PAGESPEED_API_KEY` first, then `GOOGLE_API_KEY`.
+- After that, it falls back to exported shell environment variables with the same names.
 
 So in chat flows:
 
 - if the user chooses local Lighthouse, continue normally through the wrapper without requiring an API key
-- if the user already has an env key and chooses API mode, execute through the wrapper with `--pagespeed-provider api`
-- if they paste a key in chat, execute through the wrapper with `--pagespeed-provider api --api-key`
+- if the user chooses API mode, ask them to save the key in the skill `.env`, then execute through the wrapper with `--pagespeed-provider api`
 - if they want API evidence but also want resilience, use `--pagespeed-provider api_with_fallback`
 - if they do not want to manage a key, continue with local Lighthouse or skip and label performance evidence accordingly
-- if the user pasted a key in chat, warn them after the audit that they may want to rotate or replace that key because it was shared in conversation text
 - never write the raw key into repo files, JSON artifacts, HTML output, or error messages
 
 ### 4. Review the generated artifacts
@@ -502,7 +501,7 @@ What it does:
 - uses local Lighthouse by default, or API / API-with-fallback when explicitly selected
 - can write `audit-report.html` when `--html-report` is supplied
 - can localize the static HTML artifact in English or Chinese via `--report-language`
-- stores `crawl.json`, `pagespeed.json`, `audit-run.json`, and any optional HTML report together in one output folder under `/tmp` by default
+- stores `crawl.json`, `pagespeed.json`, `audit-run.json`, and any HTML report together in one output folder under `/tmp` by default
 
 ## Example Requests
 

@@ -9,7 +9,7 @@ This skill works with both Codex and Claude Code for sampled SEO + GEO audits of
 - capped crawling up to 50 pages
 - template-aware sampling
 - local Lighthouse by default
-- optional PageSpeed API support
+- PageSpeed API support through a skill-local `.env`
 - built-in HTML reporting in English or Chinese
 
 ## Install
@@ -30,6 +30,18 @@ ln -s "$PWD/skills/seo-geo-site-audit" ~/.agents/skills/seo-geo-site-audit
 
 For Claude Code, the skill also includes a local [CLAUDE.md](skills/seo-geo-site-audit/CLAUDE.md) entry file.
 
+If you want to use PageSpeed API mode, create a local env file inside the skill directory:
+
+```bash
+cp skills/seo-geo-site-audit/.env.example skills/seo-geo-site-audit/.env
+```
+
+Then edit `skills/seo-geo-site-audit/.env` and set:
+
+```bash
+PAGESPEED_API_KEY=your_key_here
+```
+
 ## Quick Start
 
 The simplest way to try it:
@@ -49,6 +61,7 @@ Current implementation limits to know up front:
 
 - crawl cap: `1` to `50` pages
 - audit presets: `fast=1`, `light=10`, `template=50`
+- default audit scope: `light=10`
 - PageSpeed / performance test URLs: default `5`, maximum `10`
 - built-in static HTML localization: English and Chinese
 
@@ -60,7 +73,7 @@ Use `seo-geo-site-audit` when you want:
 - a GEO / AI visibility audit
 - a sampled site-quality review instead of a full crawl
 - a scored report with evidence, issues, and recommended actions
-- optional HTML output for sharing
+- HTML output for sharing
 
 ## Chat Usage
 
@@ -78,23 +91,26 @@ The skill is designed to ask setup questions one by one before crawling:
 4. HTML report on/off
 5. HTML report language, only if HTML output is enabled
 
-Recommended first test:
+Default first test:
 
 - choose `Local Lighthouse`
 - keep the default output style
-- start with a fast check or template audit
+- start with the default `10-page` light audit
 - turn HTML on if you want a shareable artifact
 
 Current performance choices:
 
-- `1. Local Lighthouse (recommended)`
+- `1. Local Lighthouse (default)`
 - `2. Skip PageSpeed`
-- `3. Use existing PageSpeed API key from env`
-- `4. I will paste the API key in chat`
+- `3. Use PageSpeed API from the skill .env`
+
+If you choose the API path, save the key in:
+
+- `skills/seo-geo-site-audit/.env`
 
 If HTML output is enabled, the follow-up language choices are:
 
-- `1. English`
+- `1. English (default)`
 - `2. Chinese`
 - `3. Other (type it in)`
 
@@ -116,7 +132,6 @@ Use the wrapper for normal runs:
 ```bash
 ~/.agents/skills/seo-geo-site-audit/scripts/audit-site \
   https://example.com \
-  --mode template \
   --output-style operator
 ```
 
@@ -138,8 +153,7 @@ Useful options:
 - `--output-style boss|operator|specialist`
 - `--max-pagespeed-urls 1-10`
 - `--pagespeed-provider local|api|api_with_fallback`
-- `--api-key YOUR_KEY`
-- `--prompt-pagespeed-key`
+- `--api-key YOUR_KEY` as a terminal-only override when needed
 - `--skip-pagespeed`
 - `--html-report`
 - `--report-language english|chinese`
@@ -162,9 +176,9 @@ This repo is intended to be safe for public cloning.
 
 - No API keys should ever be hardcoded in source, docs, or artifacts.
 - PageSpeed keys should only come from:
+  - `skills/seo-geo-site-audit/.env`
   - `PAGESPEED_API_KEY`
   - `GOOGLE_API_KEY`
-  - a one-off key provided by the user in the current chat/session
 - The code should only persist `api_key_used: true/false`, never the key itself.
 
 See:
@@ -192,7 +206,7 @@ If you run into a bug or have a suggestion, feel free to open an issue.
 - 最多 50 页的上限抓取
 - 按模板类型抽样
 - 默认使用本地 Lighthouse
-- 可选接入 PageSpeed API
+- 通过技能目录下的 `.env` 接入 PageSpeed API
 - 可选双语 HTML 报告
 
 ## 安装
@@ -213,6 +227,18 @@ ln -s "$PWD/skills/seo-geo-site-audit" ~/.agents/skills/seo-geo-site-audit
 
 对于 Claude Code，这个技能也包含了本地入口文件 [CLAUDE.md](skills/seo-geo-site-audit/CLAUDE.md)。
 
+如果你要使用 PageSpeed API 模式，请先在技能目录中创建本地 env 文件：
+
+```bash
+cp skills/seo-geo-site-audit/.env.example skills/seo-geo-site-audit/.env
+```
+
+然后编辑 `skills/seo-geo-site-audit/.env`，填入：
+
+```bash
+PAGESPEED_API_KEY=your_key_here
+```
+
 ## 快速开始
 
 最简单的体验方式：
@@ -232,6 +258,7 @@ Use $seo-geo-site-audit to audit https://example.com
 
 - 抓取页数范围：`1` 到 `50`
 - 预设模式：`fast=1`、`light=10`、`template=50`
+- 默认抓取范围：`light=10`
 - PageSpeed / 性能检测 URL 数：默认 `5`，最大 `10`
 - 内置静态 HTML 本地化目前支持英文和中文
 
@@ -243,7 +270,7 @@ Use $seo-geo-site-audit to audit https://example.com
 - GEO / AI 可见性审核
 - 采样式站点质量检查，而不是全站爬取
 - 带评分、证据、问题和修复建议的结构化报告
-- 可选 HTML 报告导出
+- HTML 报告导出
 
 ## 聊天中使用
 
@@ -261,23 +288,26 @@ Use $seo-geo-site-audit to audit https://example.com
 4. 是否生成 HTML 报告
 5. 如果开启 HTML，询问报告语言
 
-第一次测试建议：
+默认首次测试建议：
 
 - 优先选择 `Local Lighthouse`
 - 输出风格先保持默认
-- 先做 fast check 或 template audit
+- 先用默认的 `10` 页 light audit
 - 如果你想拿到可分享的产物，可以打开 HTML 输出
 
 当前性能选项：
 
-- `1. Local Lighthouse (recommended)`
+- `1. Local Lighthouse (default)`
 - `2. Skip PageSpeed`
-- `3. Use existing PageSpeed API key from env`
-- `4. I will paste the API key in chat`
+- `3. Use PageSpeed API from the skill .env`
+
+如果你选择 API 路径，请先把 key 保存到：
+
+- `skills/seo-geo-site-audit/.env`
 
 如果开启 HTML 输出，还会继续询问：
 
-- `1. English`
+- `1. English (default)`
 - `2. Chinese`
 - `3. Other (type it in)`
 
@@ -299,7 +329,6 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 ```bash
 ~/.agents/skills/seo-geo-site-audit/scripts/audit-site \
   https://example.com \
-  --mode template \
   --output-style operator
 ```
 
@@ -321,8 +350,7 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 - `--output-style boss|operator|specialist`
 - `--max-pagespeed-urls 1-10`
 - `--pagespeed-provider local|api|api_with_fallback`
-- `--api-key YOUR_KEY`
-- `--prompt-pagespeed-key`
+- `--api-key YOUR_KEY`，仅作为终端临时覆盖时使用
 - `--skip-pagespeed`
 - `--html-report`
 - `--report-language english|chinese`
@@ -345,9 +373,9 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 
 - 任何 API key 都不应该被硬编码到源码、文档或产物中。
 - PageSpeed key 只应该来自：
+  - `skills/seo-geo-site-audit/.env`
   - `PAGESPEED_API_KEY`
   - `GOOGLE_API_KEY`
-  - 用户在当前聊天 / 会话中一次性提供的 key
 - 代码只应保存 `api_key_used: true/false`，绝不能保存真实 key。
 
 更多说明见：

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import getpass
 import json
 import os
 import socket
@@ -19,17 +18,42 @@ REQUEST_TIMEOUT = 45
 MAX_ATTEMPTS = 3
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 BACKOFF_BASE = 2  # seconds
+SCRIPT_DIR = Path(__file__).resolve().parent
+SKILL_DIR = SCRIPT_DIR.parent
+SKILL_ENV_PATH = SKILL_DIR / ".env"
+
+
+def load_env_file(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("\"'")
+        if key:
+            values[key] = value
+    return values
 
 
 def resolve_api_key(args: argparse.Namespace) -> str | None:
-    api_key = args.api_key or os.getenv("PAGESPEED_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    file_env = load_env_file(SKILL_ENV_PATH)
+    api_key = (
+        args.api_key
+        or file_env.get("PAGESPEED_API_KEY")
+        or file_env.get("GOOGLE_API_KEY")
+        or os.getenv("PAGESPEED_API_KEY")
+        or os.getenv("GOOGLE_API_KEY")
+    )
     if api_key:
         return api_key
-    if args.prompt_api_key:
-        if not sys.stdin.isatty():
-            raise RuntimeError("Cannot prompt for API key without an interactive terminal.")
-        api_key = getpass.getpass("Enter Google PageSpeed Insights API key: ").strip()
-        return api_key or None
     return None
 
 
@@ -275,12 +299,7 @@ def main() -> int:
     parser.add_argument("--url", action="append", default=[], help="URL to test. May be supplied multiple times.")
     parser.add_argument("--from-crawl", help="Read representative URLs from crawl_sample.py JSON output.")
     parser.add_argument("--max-urls", type=int, default=5, help="Maximum number of URLs to test.")
-    parser.add_argument("--api-key", help="PageSpeed API key. Falls back to env vars.")
-    parser.add_argument(
-        "--prompt-api-key",
-        action="store_true",
-        help="Prompt securely for a Google PageSpeed Insights API key if one is not already set.",
-    )
+    parser.add_argument("--api-key", help=f"PageSpeed API key. Overrides {SKILL_ENV_PATH}.")
     parser.add_argument(
         "--provider",
         choices=("local", "api", "api_with_fallback"),
