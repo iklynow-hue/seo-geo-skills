@@ -19,13 +19,14 @@ LANGUAGE_PACKS = {
         "nav_method": "Method",
         "eyebrow": "SEO + GEO Audit",
         "overall_score": "Overall Score",
+        "powered_by": "Powered by SEO GEO Skills",
         "top_wins": "Top Wins",
         "top_issues": "Top Issues",
         "scorecard": "Scorecard",
+        "weighted_total": "Weighted Total",
         "section_findings": "Section Findings",
         "passed_items": "Passed items",
         "issues": "Issues",
-        "evidence": "Evidence",
         "recommended_actions": "Recommended actions",
         "pagespeed_conclusion": "PageSpeed Conclusion",
         "mobile": "Mobile",
@@ -53,13 +54,14 @@ LANGUAGE_PACKS = {
         "nav_method": "方法说明",
         "eyebrow": "SEO + GEO 审核",
         "overall_score": "总分",
+        "powered_by": "由 SEO GEO Skills 提供支持",
         "top_wins": "主要亮点",
         "top_issues": "主要问题",
         "scorecard": "评分表",
+        "weighted_total": "加权总分",
         "section_findings": "分项发现",
         "passed_items": "通过项",
         "issues": "问题",
-        "evidence": "证据",
         "recommended_actions": "建议动作",
         "pagespeed_conclusion": "PageSpeed 结论",
         "mobile": "移动端",
@@ -148,6 +150,71 @@ def render_snapshot(snapshot: list[dict], empty_label: str) -> str:
     return "<div class='snapshot-grid'>" + "".join(cards) + "</div>"
 
 
+def snapshot_label_key(label: str) -> str:
+    normalized = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "", label.strip().lower())
+    mapping = {
+        "target": "target",
+        "目标": "target",
+        "mode": "mode",
+        "模式": "mode",
+        "pagessampled": "pages_sampled",
+        "已采样页面": "pages_sampled",
+        "performanceevidence": "performance_evidence",
+        "性能证据": "performance_evidence",
+        "outputstyle": "output_style",
+        "输出风格": "output_style",
+        "confidence": "confidence",
+        "置信度": "confidence",
+    }
+    return mapping.get(normalized, normalized)
+
+
+def prepare_snapshot(snapshot: list[dict]) -> list[dict]:
+    by_key: dict[str, dict] = {}
+    ordered_unknown: list[dict] = []
+    for item in snapshot:
+        key = snapshot_label_key(str(item.get("label", "")))
+        if key in {"output_style", "confidence"}:
+            continue
+        if key in {"target", "mode", "pages_sampled", "performance_evidence"}:
+            by_key[key] = item
+        else:
+            ordered_unknown.append(item)
+    ordered = []
+    for key in ("target", "mode", "pages_sampled", "performance_evidence"):
+        if key in by_key:
+            ordered.append(by_key[key])
+    ordered.extend(ordered_unknown)
+    return ordered
+
+
+def parse_number(value: object) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def compute_weighted_total(rows: list[dict]) -> float | None:
+    total = 0.0
+    found = False
+    for row in rows:
+        weighted = parse_number(row.get("weighted_score", row.get("weighted")))
+        if weighted is None:
+            score = parse_number(row.get("score"))
+            weight = parse_number(row.get("weight"))
+            if score is not None and weight is not None:
+                weighted = score * weight / 100.0
+        if weighted is not None:
+            total += weighted
+            found = True
+    return round(total, 2) if found else None
+
+
 def render_score_table(rows: list[dict], ui: dict[str, str], empty_label: str) -> str:
     if not rows:
         return f"<p class='empty'>{html.escape(empty_label)}</p>"
@@ -158,34 +225,43 @@ def render_score_table(rows: list[dict], ui: dict[str, str], empty_label: str) -
             f"<td>{html.escape(str(row.get('section', '')))}</td>"
             f"<td>{html.escape(str(row.get('score', '')))}</td>"
             f"<td>{html.escape(str(row.get('weight', '')))}</td>"
-            f"<td>{html.escape(str(row.get('weighted_score', row.get('weighted', ''))))}</td>"
             f"<td>{html.escape(str(row.get('notes', row.get('note', ''))))}</td>"
             "</tr>"
         )
+    weighted_total = compute_weighted_total(rows)
+    summary_markup = ""
+    if weighted_total is not None:
+        summary_markup = (
+            "<div class='score-total'>"
+            f"<span>{html.escape(ui['weighted_total'])}</span>"
+            f"<strong>{html.escape(f'{weighted_total:g} / 100')}</strong>"
+            "</div>"
+        )
     return (
+        "<div class='scorecard-wrap'>"
         "<table class='score-table'>"
         "<thead><tr>"
         f"<th>{html.escape(ui['section'])}</th>"
         f"<th>{html.escape(ui['score'])}</th>"
         f"<th>{html.escape(ui['weight'])}</th>"
-        f"<th>{html.escape(ui['weighted'])}</th>"
         f"<th>{html.escape(ui['notes'])}</th>"
         "</tr></thead>"
         f"<tbody>{''.join(body_rows)}</tbody></table>"
+        f"{summary_markup}</div>"
     )
 
 
 def render_performance_column(block: dict, heading: str, ui: dict[str, str], empty_label: str) -> str:
     if not block:
         return (
-            "<article class='metric-card'>"
+            "<article class='metric-card panel'>"
             f"<h3>{html.escape(heading)}</h3>"
             f"<p class='empty'>{html.escape(empty_label)}</p>"
             "</article>"
         )
     largest_issues = block.get("largest_issues", [])
     return (
-        "<article class='metric-card'>"
+        "<article class='metric-card panel'>"
         f"<h3>{html.escape(heading)}</h3>"
         "<dl class='metric-list'>"
         f"<div><dt>{html.escape(ui['average_performance'])}</dt><dd>{html.escape(str(block.get('average_performance', '')))}</dd></div>"
@@ -202,10 +278,13 @@ def build_html(payload: dict) -> str:
     ui = {**LANGUAGE_PACKS[language], **payload.get("ui_text", {})}
 
     title = str(payload.get("title", "SEO + GEO Audit Report"))
+    display_title = str(payload.get("display_title", title))
     target_url = str(payload.get("target_url", ""))
+    repo_url = str(payload.get("repo_url", "")).strip()
+    repo_label = str(payload.get("repo_label", "SEO GEO Skills")).strip()
     intro = str(payload.get("intro", "")).strip()
     generated_at = str(payload.get("generated_at", datetime.now(timezone.utc).replace(microsecond=0).isoformat()))
-    snapshot = payload.get("snapshot", [])
+    snapshot = prepare_snapshot(payload.get("snapshot", []))
     overall = payload.get("overall", {})
     section_scores = payload.get("section_scores", [])
     top_wins = [str(item) for item in payload.get("top_wins", [])]
@@ -214,13 +293,6 @@ def build_html(payload: dict) -> str:
     pagespeed = payload.get("pagespeed_conclusion", {})
     roadmap = payload.get("roadmap", {})
     method_notes = [str(item) for item in payload.get("method_notes", [])]
-    artifacts = payload.get("artifacts", [])
-
-    section_nav = "".join(
-        f"<a href='#{slugify(str(section.get('title', '')))}'>{html.escape(str(section.get('title', 'Section')))}</a>"
-        for section in sections
-    )
-
     rendered_sections = []
     for section in sections:
         section_title = str(section.get("title", "Section"))
@@ -244,34 +316,12 @@ def build_html(payload: dict) -> str:
             f"{render_issue_items(section.get('issues', []), ui['not_provided'])}"
             "</article>"
             "<article class='finding-block'>"
-            f"<h3>{html.escape(ui['evidence'])}</h3>"
-            f"{render_list([str(item) for item in section.get('evidence', [])], ui['not_provided'])}"
-            "</article>"
-            "<article class='finding-block'>"
             f"<h3>{html.escape(ui['recommended_actions'])}</h3>"
             f"{render_list([str(item) for item in section.get('recommended_actions', [])], ui['not_provided'])}"
             "</article>"
             "</div>"
             "</section>"
         .format(id=section_id))
-
-    artifact_markup = ""
-    if artifacts:
-        rows = []
-        for item in artifacts:
-            label = html.escape(str(item.get("label", "")))
-            value = html.escape(str(item.get("path", "")))
-            rows.append(f"<tr><th>{label}</th><td>{value}</td></tr>")
-        artifact_markup = (
-            "<section class='panel' id='artifacts'>"
-            f"<h2>{html.escape(ui['generated_artifacts'])}</h2>"
-            f"<table class='artifact-table'><tbody>{''.join(rows)}</tbody></table>"
-            "</section>"
-        )
-
-    overall_band = html.escape(str(overall.get("band", "")))
-    overall_summary = html.escape(str(overall.get("summary", "")))
-    overall_score = html.escape(str(overall.get("score", "")))
 
     return f"""<!doctype html>
 <html lang="{html.escape(language)}">
@@ -327,8 +377,8 @@ def build_html(payload: dict) -> str:
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 20px;
-      padding: 12px 20px;
+      gap: 24px;
+      padding: 14px 20px;
       background: rgba(255,255,255,0.86);
       backdrop-filter: blur(10px);
       box-shadow: var(--shadow);
@@ -336,22 +386,32 @@ def build_html(payload: dict) -> str:
     .brand {{
       font-family: var(--font-display);
       font-size: 15px;
-      font-weight: 700;
+      font-weight: 800;
       letter-spacing: 0.02em;
+      color: var(--ink);
     }}
     .nav {{
       display: flex;
-      gap: 16px;
+      gap: 10px;
       flex-wrap: wrap;
-      font-size: 13px;
+      justify-content: flex-end;
+      font-size: 12px;
     }}
-    .nav a {{ color: var(--muted); }}
+    .nav a {{
+      color: var(--muted);
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(91,118,254,0.06);
+      box-shadow: inset 0 0 0 1px rgba(91,118,254,0.08);
+      transition: background 120ms ease, color 120ms ease;
+    }}
+    .nav a:hover {{
+      background: rgba(91,118,254,0.12);
+      color: var(--blue-pressed);
+    }}
     .hero {{
       padding: 64px 0 36px;
-      display: grid;
-      grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.8fr);
-      gap: 20px;
-      align-items: end;
+      display: block;
     }}
     .eyebrow {{
       display: inline-flex;
@@ -370,16 +430,34 @@ def build_html(payload: dict) -> str:
     h1 {{
       margin: 18px 0 14px;
       font-family: var(--font-display);
-      font-size: clamp(2.6rem, 7vw, 4.6rem);
-      line-height: 0.96;
+      font-size: clamp(2.2rem, 6vw, 3.8rem);
+      line-height: 0.98;
       letter-spacing: -0.05em;
       font-weight: 800;
-      max-width: 10ch;
+      max-width: 12ch;
     }}
     .hero-target {{
       font-size: 17px;
       color: var(--muted);
       max-width: 62ch;
+    }}
+    .hero-links {{
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }}
+    .hero-link {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(91,118,254,0.08);
+      box-shadow: var(--shadow);
+      color: var(--blue-pressed);
+      font-size: 13px;
+      font-weight: 600;
     }}
     .hero-meta {{
       display: flex;
@@ -395,48 +473,6 @@ def build_html(payload: dict) -> str:
       box-shadow: var(--shadow);
       padding: 24px;
     }}
-    .overall-card {{
-      display: grid;
-      gap: 18px;
-      align-self: stretch;
-      background: linear-gradient(160deg, rgba(91,118,254,0.08), rgba(255,255,255,0.95));
-    }}
-    .overall-kicker {{
-      font-family: var(--font-display);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-    }}
-    .overall-row {{
-      display: flex;
-      align-items: center;
-      gap: 18px;
-    }}
-    .overall-score {{
-      width: 104px;
-      height: 104px;
-      border-radius: 28px;
-      display: grid;
-      place-items: center;
-      background: var(--blue);
-      color: white;
-      font-family: var(--font-display);
-      font-size: 40px;
-      font-weight: 800;
-      box-shadow: 0 18px 36px rgba(91,118,254,0.22);
-    }}
-    .overall-band {{
-      font-family: var(--font-display);
-      font-size: 26px;
-      font-weight: 700;
-      line-height: 1.08;
-      letter-spacing: -0.03em;
-    }}
-    .overall-summary {{
-      color: var(--muted);
-      font-size: 15px;
-    }}
     .section-block {{ margin-top: 22px; }}
     .section-block h2 {{
       font-family: var(--font-display);
@@ -447,7 +483,7 @@ def build_html(payload: dict) -> str:
     }}
     .snapshot-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 12px;
     }}
     .snapshot-card {{
@@ -470,16 +506,11 @@ def build_html(payload: dict) -> str:
       font-weight: 700;
       letter-spacing: -0.03em;
     }}
-    .dual-grid {{
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 18px;
-      align-items: start;
-    }}
     .highlight-grid {{
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 18px;
+      margin-top: 18px;
     }}
     .highlight-card h3,
     .metric-card h3,
@@ -491,22 +522,44 @@ def build_html(payload: dict) -> str:
     }}
     .highlight-card.wins {{ background: var(--teal); }}
     .highlight-card.issues {{ background: var(--coral); }}
-    .score-table,
-    .artifact-table {{
+    .score-table {{
       width: 100%;
       border-collapse: collapse;
       font-size: 14px;
     }}
     .score-table th,
-    .score-table td,
-    .artifact-table th,
-    .artifact-table td {{
+    .score-table td {{
       text-align: left;
       padding: 12px 10px;
       border-bottom: 1px solid var(--line);
       vertical-align: top;
     }}
     .score-table thead th {{ color: var(--muted); font-weight: 600; }}
+    .scorecard-wrap {{
+      display: grid;
+      gap: 18px;
+    }}
+    .score-total {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 18px;
+      border-radius: var(--radius-md);
+      background: rgba(91,118,254,0.08);
+    }}
+    .score-total span {{
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }}
+    .score-total strong {{
+      font-family: var(--font-display);
+      font-size: 28px;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }}
     .finding-section {{ margin-top: 18px; }}
     .section-heading {{
       display: flex;
@@ -541,7 +594,7 @@ def build_html(payload: dict) -> str:
     }}
     .finding-grid {{
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 14px;
     }}
     .finding-block {{
@@ -651,13 +704,19 @@ def build_html(payload: dict) -> str:
     }}
     footer {{
       margin-top: 28px;
-      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
       color: var(--muted);
       font-size: 12px;
     }}
+    footer a {{
+      color: var(--blue-pressed);
+      font-weight: 600;
+    }}
     @media (max-width: 960px) {{
-      .hero,
-      .dual-grid,
       .highlight-grid,
       .metric-grid,
       .roadmap-grid,
@@ -665,9 +724,10 @@ def build_html(payload: dict) -> str:
         grid-template-columns: 1fr;
       }}
       .topbar {{
-        align-items: start;
         flex-direction: column;
+        align-items: start;
       }}
+      .nav {{ justify-content: start; }}
     }}
   </style>
 </head>
@@ -681,31 +741,20 @@ def build_html(payload: dict) -> str:
       <a href="#performance">{html.escape(ui['nav_performance'])}</a>
       <a href="#roadmap">{html.escape(ui['nav_roadmap'])}</a>
       <a href="#method">{html.escape(ui['nav_method'])}</a>
-      {section_nav}
     </nav>
   </div>
   <main>
     <section class="hero">
       <div>
         <div class="eyebrow">{html.escape(ui['eyebrow'])}</div>
-        <h1>{html.escape(title)}</h1>
+        <h1>{html.escape(display_title)}</h1>
         <div class="hero-target">{html.escape(target_url)}</div>
         {f"<p class='hero-target'>{html.escape(intro)}</p>" if intro else ""}
+        {f"<div class='hero-links'><a class='hero-link' href='{html.escape(repo_url)}'>{html.escape(repo_label)}: {html.escape(repo_url)}</a></div>" if repo_url else ""}
         <div class="hero-meta">
           <span>{html.escape(ui['generated_at'])}: {html.escape(generated_at)}</span>
-          {f"<span>{html.escape(overall_band)}</span>" if overall_band else ""}
         </div>
       </div>
-      <article class="overall-card panel">
-        <div class="overall-kicker">{html.escape(ui['overall_score'])}</div>
-        <div class="overall-row">
-          <div class="overall-score">{overall_score}</div>
-          <div>
-            <div class="overall-band">{overall_band}</div>
-            {f"<p class='overall-summary'>{overall_summary}</p>" if overall_summary else ""}
-          </div>
-        </div>
-      </article>
     </section>
 
     <section class="section-block" id="snapshot">
@@ -713,7 +762,7 @@ def build_html(payload: dict) -> str:
       {render_snapshot(snapshot, ui['not_provided'])}
     </section>
 
-    <section class="section-block dual-grid" id="scorecard">
+    <section class="section-block" id="scorecard">
       <article class="panel">
         <h2>{html.escape(ui['scorecard'])}</h2>
         {render_score_table(section_scores, ui, ui['not_provided'])}
@@ -761,9 +810,10 @@ def build_html(payload: dict) -> str:
       </article>
     </section>
 
-    {artifact_markup}
-
-    <footer>{html.escape(title)}</footer>
+    <footer>
+      <span>{html.escape(ui['powered_by'])}</span>
+      {f"<a href='{html.escape(repo_url)}'>{html.escape(repo_label)}</a>" if repo_url else ""}
+    </footer>
   </main>
 </body>
 </html>

@@ -42,6 +42,19 @@ Then edit `skills/seo-geo-site-audit/.env` and set:
 PAGESPEED_API_KEY=your_key_here
 ```
 
+## Update
+
+If your local install is a symlink, updating is simple:
+
+```bash
+cd seo-geo-skills
+git pull
+```
+
+Because `~/.agents/skills/seo-geo-site-audit` points at this repo folder, the skill updates immediately after the pull.
+
+If you copied the skill instead of symlinking it, replace the local folder with the newer `skills/seo-geo-site-audit` contents from this repo.
+
 ## Quick Start
 
 The simplest way to try it:
@@ -255,6 +268,19 @@ cp skills/seo-geo-site-audit/.env.example skills/seo-geo-site-audit/.env
 ```bash
 PAGESPEED_API_KEY=your_key_here
 ```
+
+## 更新
+
+如果你的本地安装方式是符号链接，更新会很简单：
+
+```bash
+cd seo-geo-skills
+git pull
+```
+
+因为 `~/.agents/skills/seo-geo-site-audit` 直接指向这个仓库目录，所以 pull 完就会立即生效。
+
+如果你不是用符号链接，而是手动复制技能目录，那么请用仓库里的 `skills/seo-geo-site-audit` 覆盖你本地那份旧目录。
 
 ## 快速开始
 
