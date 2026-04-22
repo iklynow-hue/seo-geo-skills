@@ -811,7 +811,6 @@ def build_html(payload: dict) -> str:
     </section>
 
     <footer>
-      <span>{html.escape(ui['powered_by'])}</span>
       {f"<a href='{html.escape(repo_url)}'>{html.escape(repo_label)}</a>" if repo_url else ""}
     </footer>
   </main>
