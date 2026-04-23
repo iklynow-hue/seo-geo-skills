@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 LANGUAGE_PACKS = {
     "en": {
-        "nav_top": "Top",
+        "nav_top": "Back to Top",
         "nav_snapshot": "Snapshot",
         "nav_scorecard": "Scorecard",
         "nav_sections": "Findings",
@@ -49,7 +49,7 @@ LANGUAGE_PACKS = {
         "not_provided": "Not provided",
     },
     "zh": {
-        "nav_top": "顶部",
+        "nav_top": "回到顶部",
         "nav_snapshot": "概览",
         "nav_scorecard": "评分表",
         "nav_sections": "分项发现",
@@ -241,9 +241,12 @@ def format_generated_at(value: str, language: str) -> str:
     if not raw:
         return raw
     try:
-        parsed = datetime.fromisoformat(raw)
+        normalized = raw[:-1] + "+00:00" if raw.endswith("Z") else raw
+        parsed = datetime.fromisoformat(normalized)
     except ValueError:
         return raw
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone()
     if language == "zh":
         return parsed.strftime("%Y-%m-%d %H:%M")
     return parsed.strftime("%b %d, %Y %H:%M")
