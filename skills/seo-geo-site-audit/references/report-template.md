@@ -35,16 +35,16 @@
 
 ## Scorecard
 
-| Section | Score | Weight | Notes |
-|---|---:|---:|---|
-| Technical SEO & Indexability |  | 20 |  |
-| On-Page SEO & Content Packaging |  | 15 |  |
-| Information Architecture & Internal Linking |  | 10 |  |
-| GEO & AI Extractability |  | 20 |  |
-| EEAT & Trust Signals |  | 15 |  |
-| Entity & Structured Data |  | 10 |  |
-| Performance & Page Experience |  | 10 |  |
-| **Overall** |  | **100** |  |
+| Section | Section score (0-100) | Weight (%) | Contribution to total | Notes |
+|---|---:|---:|---:|---|
+| Technical SEO & Indexability |  | 20% |  |  |
+| On-Page SEO & Content Packaging |  | 15% |  |  |
+| Information Architecture & Internal Linking |  | 10% |  |  |
+| GEO & AI Extractability |  | 20% |  |  |
+| EEAT & Trust Signals |  | 15% |  |  |
+| Entity & Structured Data |  | 10% |  |  |
+| Performance & Page Experience |  | 10% |  |  |
+| **Weighted overall** |  | **100%** |  |  |
 
 ## Section Findings
 
@@ -213,4 +213,3 @@
 
 - Crawl is a sampled audit, not a full-site crawl.
 - Observed evidence comes from fetched pages and PageSpeed results only.
-- Missing external datasets should be listed here.

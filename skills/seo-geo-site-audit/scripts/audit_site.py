@@ -320,12 +320,16 @@ def build_final_report_seed(
     sections = []
     weights = [20, 15, 10, 20, 15, 10, 10]
     for title_value, weight in zip(section_titles, weights):
-        notes_value = "Fill after scoring." if language == "en" else "请在评分后填写。"
+        notes_value = (
+            "Fill after scoring. Treat section score as 0-100 and weight as a percentage."
+            if language == "en"
+            else "请在评分后填写。板块得分按 100 分制理解，权重按百分比展示。"
+        )
         section_scores.append(
             {
                 "section": title_value.split(". ", 1)[-1],
                 "score": "",
-                "weight": weight,
+                "weight": f"{weight}%",
                 "weighted_score": "",
                 "notes": notes_value,
             }

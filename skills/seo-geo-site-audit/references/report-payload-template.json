@@ -19,7 +19,7 @@
     {
       "section": "Technical SEO & Indexability",
       "score": 0,
-      "weight": 20,
+      "weight": "20%",
       "weighted_score": 0,
       "notes": "Short note"
     }

@@ -41,9 +41,9 @@ LANGUAGE_PACKS = {
         "method_notes": "Notes",
         "generated_artifacts": "Artifacts",
         "section": "Section",
-        "score": "Score",
-        "weight": "Weight",
-        "weighted": "Weighted",
+        "score": "Section Score (0-100)",
+        "weight": "Weight (%)",
+        "weighted": "Contribution",
         "notes": "Notes",
         "generated_at": "Generated",
         "not_provided": "Not provided",
@@ -78,9 +78,9 @@ LANGUAGE_PACKS = {
         "method_notes": "备注",
         "generated_artifacts": "产物",
         "section": "分项",
-        "score": "得分",
-        "weight": "权重",
-        "weighted": "加权",
+        "score": "板块得分（100分制）",
+        "weight": "权重（%）",
+        "weighted": "对总分贡献",
         "notes": "说明",
         "generated_at": "生成时间",
         "not_provided": "未提供",
@@ -197,10 +197,31 @@ def parse_number(value: object) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
+        cleaned = value.strip().rstrip("%").strip()
         try:
-            return float(value.strip())
+            return float(cleaned)
         except ValueError:
             return None
+    return None
+
+
+def format_weight(value: object) -> str:
+    if isinstance(value, str) and value.strip().endswith("%"):
+        return value.strip()
+    parsed = parse_number(value)
+    if parsed is None:
+        return str(value or "")
+    return f"{parsed:g}%"
+
+
+def compute_weighted_value(row: dict) -> float | None:
+    weighted = parse_number(row.get("weighted_score", row.get("weighted")))
+    if weighted is not None:
+        return weighted
+    score = parse_number(row.get("score"))
+    weight = parse_number(row.get("weight"))
+    if score is not None and weight is not None:
+        return score * weight / 100.0
     return None
 
 
@@ -208,12 +229,7 @@ def compute_weighted_total(rows: list[dict]) -> float | None:
     total = 0.0
     found = False
     for row in rows:
-        weighted = parse_number(row.get("weighted_score", row.get("weighted")))
-        if weighted is None:
-            score = parse_number(row.get("score"))
-            weight = parse_number(row.get("weight"))
-            if score is not None and weight is not None:
-                weighted = score * weight / 100.0
+        weighted = compute_weighted_value(row)
         if weighted is not None:
             total += weighted
             found = True
@@ -238,11 +254,13 @@ def render_score_table(rows: list[dict], ui: dict[str, str], empty_label: str) -
         return f"<p class='empty'>{html.escape(empty_label)}</p>"
     body_rows = []
     for row in rows:
+        weighted_value = compute_weighted_value(row)
         body_rows.append(
             "<tr>"
             f"<td>{html.escape(str(row.get('section', '')))}</td>"
             f"<td>{html.escape(str(row.get('score', '')))}</td>"
-            f"<td>{html.escape(str(row.get('weight', '')))}</td>"
+            f"<td>{html.escape(format_weight(row.get('weight', '')))}</td>"
+            f"<td>{html.escape(f'{weighted_value:g}' if weighted_value is not None else '')}</td>"
             f"<td>{html.escape(str(row.get('notes', row.get('note', ''))))}</td>"
             "</tr>"
         )
@@ -262,6 +280,7 @@ def render_score_table(rows: list[dict], ui: dict[str, str], empty_label: str) -
         f"<th>{html.escape(ui['section'])}</th>"
         f"<th>{html.escape(ui['score'])}</th>"
         f"<th>{html.escape(ui['weight'])}</th>"
+        f"<th>{html.escape(ui['weighted'])}</th>"
         f"<th>{html.escape(ui['notes'])}</th>"
         "</tr></thead>"
         f"<tbody>{''.join(body_rows)}</tbody></table>"

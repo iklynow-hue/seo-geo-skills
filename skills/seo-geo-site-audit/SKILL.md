@@ -326,6 +326,9 @@ Rules:
 - Penalize recurring sitewide failures more than isolated page issues.
 - Reward consistent structural wins across templates.
 - If the audit sample is small, explicitly say confidence is lower.
+- In the final report scorecard, treat each section score as a **0-100** score.
+- Display section **weight as a percentage** such as `20%`, not a bare number like `20`.
+- If possible, show each section's **contribution to total score** as `score × weight%`.
 
 ### 7. Write the report
 
@@ -348,6 +351,14 @@ Every issue should include:
 - what to fix
 
 Keep the final written audit in the selected output language.
+
+For the final scorecard presentation:
+
+- make it obvious that section scores are each out of **100**
+- show weights as percentages
+- prefer a scorecard structure like:
+  section / section score / weight (%) / contribution to total / notes
+- avoid wording that makes section scores look like they should add up to 100 on their own
 
 If the audit used local Lighthouse, explicitly say the performance evidence is lab-based and does not include CrUX field data.
 
