@@ -106,6 +106,14 @@ The skill is designed to ask setup questions one by one before crawling:
 
 Language confirmation is mandatory for the skill flow. The audit should not proceed to the final report until the user confirms the language or explicitly accepts the default English.
 
+If you already know your preferences, you can put them in the first prompt and skip the questionnaire. If scope, output style, PageSpeed handling, HTML on/off, and final language are all clearly stated, the agent should use them directly instead of asking again.
+
+Example:
+
+```text
+Use $seo-geo-site-audit to audit https://example.com with light mode, Operator output, PageSpeed API from the skill .env, HTML report on, and final report in Chinese.
+```
+
 Default first test:
 
 - choose `Local Lighthouse`

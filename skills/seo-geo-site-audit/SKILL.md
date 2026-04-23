@@ -124,6 +124,8 @@ Prefer template coverage over brute-force depth. A good audit sample usually inc
 
 When the user asks for an audit but has not specified the setup, ask a short confirmation before doing any crawl.
 
+If the user already provides the setup clearly in the initial prompt, do **not** ask the same questions again. Parse the stated preferences, restate them briefly if helpful, and continue directly.
+
 Confirm:
 
 - target URL
@@ -137,6 +139,19 @@ Confirm:
 Ask these questions **one by one**, not as a single block. Wait for the user's answer to each question before asking the next one.
 
 Use numbered choices so the user can answer with `1`, `2`, `3`, or `4`.
+
+Treat the setup as already specified when the user clearly gives:
+
+- target URL
+- scope or crawl mode
+- output style
+- PageSpeed handling
+- HTML report on/off
+- final output language
+
+If all of those are present, skip the setup questionnaire and run the audit.
+
+If only some are present, ask **only** for the missing items. Do not re-ask preferences the user already stated clearly.
 
 Default setup sequence:
 
@@ -202,6 +217,10 @@ If the user has answered scope, output style, PageSpeed handling, and HTML repor
 If the agent fails to ask these questions on its own, the user should explicitly say:
 
 `Ask me the setup questions one by one with numbered options for scope, output style, PageSpeed handling, HTML report, and final output language before you begin.`
+
+If the user wants to skip the questionnaire, they can specify preferences in one prompt, for example:
+
+`Use $seo-geo-site-audit to audit https://example.com with light mode, Operator output, PageSpeed API from the skill .env, HTML report on, and final report in Chinese.`
 
 ### 2. Use the wrapper for all normal audits
 

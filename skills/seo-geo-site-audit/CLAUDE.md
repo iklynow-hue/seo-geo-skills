@@ -5,6 +5,8 @@ Use this skill when the user wants an SEO audit, GEO audit, AI visibility review
 Default operating rules:
 
 - Ask the setup questions one by one before crawling if scope is incomplete.
+- If the user already specifies scope, output style, PageSpeed handling, HTML preference, and final output language clearly, do not re-ask them. Continue with those stated preferences.
+- If the user only specifies some preferences, ask only for the missing items.
 - Treat language confirmation as mandatory. Do not consider setup complete until the user confirms the final output language or explicitly accepts the default English.
 - Use the wrapper script for normal audits:
   `/Users/klyment/.agents/skills/seo-geo-site-audit/scripts/audit-site`
