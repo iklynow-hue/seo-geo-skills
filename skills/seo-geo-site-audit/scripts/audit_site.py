@@ -15,6 +15,8 @@ from fetchers import check_prerequisites, print_prereq_summary
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+SKILL_DIR = SCRIPT_DIR.parent
+RUNS_DIR = SKILL_DIR / "runs"
 CRAWL_SCRIPT = SCRIPT_DIR / "crawl_sample.py"
 PAGESPEED_SCRIPT = SCRIPT_DIR / "pagespeed_batch.py"
 DEFAULT_MAX_PAGESPEED_URLS = 5
@@ -142,7 +144,7 @@ def build_output_dir(url: str, out_dir: str | None) -> Path:
     if out_dir:
         path = Path(out_dir).expanduser().resolve()
     else:
-        path = Path("/tmp") / f"site-audit-{safe_host(url)}-{now_stamp()}"
+        path = RUNS_DIR / f"site-audit-{safe_host(url)}-{now_stamp()}"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -722,7 +724,10 @@ def main() -> int:
         default="operator",
         help="Report style to record alongside the audit artifacts.",
     )
-    parser.add_argument("--out-dir", help="Directory for audit artifacts. Defaults to /tmp/site-audit-<host>-<stamp>.")
+    parser.add_argument(
+        "--out-dir",
+        help="Directory for audit artifacts. Defaults to <skill-dir>/runs/site-audit-<host>-<stamp>.",
+    )
     parser.add_argument("--skip-pagespeed", action="store_true", help="Skip PageSpeed collection.")
     parser.add_argument(
         "--max-pagespeed-urls",

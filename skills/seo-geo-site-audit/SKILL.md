@@ -391,8 +391,8 @@ If HTML output is enabled:
 
 ```bash
 /Users/klyment/.agents/skills/seo-geo-site-audit/scripts/render-report-html \
-  --report-json /tmp/site-audit-<host>-<stamp>/final-report.json \
-  --out /tmp/site-audit-<host>-<stamp>/audit-report.html
+  --report-json /Users/klyment/.agents/skills/seo-geo-site-audit/runs/site-audit-<host>-<stamp>/final-report.json \
+  --out /Users/klyment/.agents/skills/seo-geo-site-audit/runs/site-audit-<host>-<stamp>/audit-report.html
 ```
 
 4. Mention the generated `audit-report.html` path in the final response in addition to the written audit.

@@ -174,8 +174,8 @@ Then render the polished final HTML after you fill `final-report.json`:
 
 ```bash
 ~/.agents/skills/seo-geo-site-audit/scripts/render-report-html \
-  --report-json /tmp/site-audit-example.com-<stamp>/final-report.json \
-  --out /tmp/site-audit-example.com-<stamp>/audit-report.html
+  --report-json ~/.agents/skills/seo-geo-site-audit/runs/site-audit-example.com-<stamp>/final-report.json \
+  --out ~/.agents/skills/seo-geo-site-audit/runs/site-audit-example.com-<stamp>/audit-report.html
 ```
 
 Useful options:
@@ -401,8 +401,8 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 
 ```bash
 ~/.agents/skills/seo-geo-site-audit/scripts/render-report-html \
-  --report-json /tmp/site-audit-example.com-<stamp>/final-report.json \
-  --out /tmp/site-audit-example.com-<stamp>/audit-report.html
+  --report-json ~/.agents/skills/seo-geo-site-audit/runs/site-audit-example.com-<stamp>/final-report.json \
+  --out ~/.agents/skills/seo-geo-site-audit/runs/site-audit-example.com-<stamp>/audit-report.html
 ```
 
 常用参数：
