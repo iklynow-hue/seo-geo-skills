@@ -46,7 +46,8 @@ Reward:
 - robots and sitemap are present and sane
 - canonical tags are consistent
 - title / meta / H1 coverage is strong
-- core content appears in initial HTML
+- core content appears in raw Googlebot-visible HTML
+- rendered-browser content does not materially exceed the search-engine baseline
 - duplicate metadata is limited
 
 Penalize heavily:
@@ -54,7 +55,9 @@ Penalize heavily:
 - large share of missing canonicals
 - widespread missing descriptions or H1 problems
 - no sitemap
-- no meaningful body content in initial HTML
+- no meaningful body content in raw Googlebot-visible HTML
+- important content or navigation only appears after JavaScript rendering
+- sampled pages are found only through DOM route hints or route guesses
 - heavy duplicate title / meta clusters
 - many important pages marked noindex accidentally
 
@@ -81,6 +84,7 @@ Penalize:
 Reward:
 
 - major templates are discoverable
+- important pages are linked with crawlable raw `<a href>` anchors where possible
 - breadcrumbs exist on deeper pages
 - internal links are healthy
 - important pages are not buried
@@ -89,6 +93,7 @@ Reward:
 Penalize:
 
 - low internal-link density
+- navigation that depends on JS-only handlers, framework state, or guessed routes
 - weak breadcrumb coverage
 - orphan-like pages in sitemap with poor linking
 - inconsistent template navigation

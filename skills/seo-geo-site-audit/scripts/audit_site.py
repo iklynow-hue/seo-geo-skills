@@ -68,7 +68,10 @@ LANGUAGE_PACKS = {
         "average_score": "Average score",
         "sampled_pages": "Sampled Pages",
         "url": "URL",
+        "discovery_source": "Discovery source",
         "title": "Title",
+        "raw_words": "Raw words",
+        "rendered_words": "Rendered words",
         "no_pages_sampled": "No pages sampled.",
         "no_performance_data": "No {strategy} performance data collected.",
         "reading_this_report": "Reading this report:",
@@ -118,7 +121,10 @@ LANGUAGE_PACKS = {
         "average_score": "平均得分",
         "sampled_pages": "采样页面",
         "url": "URL",
+        "discovery_source": "发现来源",
         "title": "标题",
+        "raw_words": "Raw 字数",
+        "rendered_words": "渲染后字数",
         "no_pages_sampled": "没有采样页面。",
         "no_performance_data": "未收集 {strategy} 性能数据。",
         "reading_this_report": "阅读说明：",
@@ -253,6 +259,9 @@ def build_final_report_seed(
     pagespeed = read_json(pagespeed_path) if pagespeed_path and pagespeed_path.exists() else {}
     summary = crawl.get("summary", {})
     page_count = int(crawl.get("page_count", 0) or 0)
+    pages_requiring_js_content = int(summary.get("pages_requiring_js_content", 0) or 0)
+    pages_requiring_js_navigation = int(summary.get("pages_requiring_js_navigation", 0) or 0)
+    pages_assisted_discovery = int(summary.get("pages_assisted_discovery", 0) or 0)
     pagespeed_provider = pagespeed.get("provider")
     pagespeed_errors = pagespeed.get("errors", [])
     language = normalize_report_language(report_language)
@@ -282,6 +291,13 @@ def build_final_report_seed(
             method_notes.append(f"当前性能证据来源：{pagespeed_provider}。")
         if pagespeed_errors:
             method_notes.append("PageSpeed 存在部分失败，请在最终结论中明确说明。")
+        if pages_requiring_js_content or pages_requiring_js_navigation or pages_assisted_discovery:
+            method_notes.append(
+                "搜索引擎基线提示："
+                f"{pages_requiring_js_content} 个页面内容依赖 JS 渲染，"
+                f"{pages_requiring_js_navigation} 个页面导航依赖 JS 渲染，"
+                f"{pages_assisted_discovery} 个页面来自辅助发现。"
+            )
     else:
         title = "SEO + GEO Audit Report"
         snapshot = [
@@ -308,6 +324,13 @@ def build_final_report_seed(
             method_notes.append(f"Performance evidence currently comes from {pagespeed_provider}.")
         if pagespeed_errors:
             method_notes.append("PageSpeed recorded partial failures; mention that clearly in the final report.")
+        if pages_requiring_js_content or pages_requiring_js_navigation or pages_assisted_discovery:
+            method_notes.append(
+                "Search baseline note: "
+                f"{pages_requiring_js_content} page(s) depend on JS-rendered content, "
+                f"{pages_requiring_js_navigation} page(s) depend on JS-rendered navigation, "
+                f"and {pages_assisted_discovery} page(s) came from assisted discovery."
+            )
 
     section_titles = [
         "1. Technical SEO & Indexability" if language == "en" else "1. 技术 SEO 与可索引性",
@@ -486,7 +509,10 @@ def build_html_report(
             "<tr>"
             f"<td><a href=\"{html.escape(page.get('url', ''))}\">{html.escape(page.get('url', ''))}</a></td>"
             f"<td>{html.escape(str(page.get('template', '')))}</td>"
+            f"<td>{html.escape(str(page.get('discovery_source', '')))}</td>"
             f"<td>{html.escape(str(page.get('status', '')))}</td>"
+            f"<td>{html.escape(str(page.get('word_count', '')))}</td>"
+            f"<td>{html.escape(str(page.get('rendered_word_count', '')))}</td>"
             f"<td>{html.escape(page.get('title', '')[:120])}</td>"
             "</tr>"
         )
@@ -664,10 +690,10 @@ def build_html_report(
       <h2>{html.escape(pack['sampled_pages'])}</h2>
       <table>
         <thead>
-          <tr><th>{html.escape(pack['url'])}</th><th>{html.escape(pack['template'])}</th><th>{html.escape(pack['status'])}</th><th>{html.escape(pack['title'])}</th></tr>
+          <tr><th>{html.escape(pack['url'])}</th><th>{html.escape(pack['template'])}</th><th>{html.escape(pack['discovery_source'])}</th><th>{html.escape(pack['status'])}</th><th>{html.escape(pack['raw_words'])}</th><th>{html.escape(pack['rendered_words'])}</th><th>{html.escape(pack['title'])}</th></tr>
         </thead>
         <tbody>
-          {''.join(page_rows) or f'<tr><td colspan="4">{html.escape(pack["no_pages_sampled"])}</td></tr>'}
+          {''.join(page_rows) or f'<tr><td colspan="7">{html.escape(pack["no_pages_sampled"])}</td></tr>'}
         </tbody>
       </table>
     </section>

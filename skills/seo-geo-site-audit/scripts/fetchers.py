@@ -6,6 +6,9 @@ Fetcher priority chain:
   2. Lightpanda (headless CDP browser, fast) — secondary
   3. agent-browser (Playwright-based) — tertiary
   4. urllib.request (raw HTTP, no JS) — fallback
+
+Raw HTTP fetches are also exposed separately so the crawler can keep a
+search-engine baseline distinct from browser-rendered evidence.
 """
 from __future__ import annotations
 
@@ -34,6 +37,11 @@ LIGHTPANDA_DIR = Path.home() / ".local" / "bin"
 LIGHTPANDA_BIN = LIGHTPANDA_DIR / "lightpanda"
 LIGHTPANDA_CDP_PORT = 19222
 DEFAULT_UA = "seo-geo-site-audit/1.0 (+https://example.invalid)"
+SEARCH_ENGINE_UA = (
+    "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/W.X.Y.Z Mobile Safari/537.36 "
+    "(compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+)
 MAX_BODY_CHARS = 250_000
 FETCH_TIMEOUT = 30
 SCRAPLING_NETWORK_IDLE_TIMEOUT = 35_000  # ms — heavier SPAs need more time
@@ -51,22 +59,25 @@ LIGHTPANDA_URLS = {
 # DOM link extraction (for SPA-heavy sites)
 # ---------------------------------------------------------------------------
 
-# JS snippet that extracts all navigable links from the rendered DOM.
-# Goes beyond <a href> to catch SPA router links, data attributes, etc.
+# JS snippet that extracts rendered links separately from SPA router hints.
+# The crawler treats hints as audit assistance, not search-engine crawl proof.
 DOM_LINK_EXTRACT_JS = """(() => {
-  const links = new Set();
+  const anchors = new Set();
+  const attributeHints = new Set();
+  const onclickHints = new Set();
+  const frameworkHints = new Set();
   // 1. Standard <a href> tags
   document.querySelectorAll('a[href]').forEach(a => {
     const href = a.getAttribute('href');
     if (href && !href.startsWith('#') && !href.startsWith('javascript:') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
-      try { links.add(new URL(href, document.baseURI).href); } catch(e) {}
+      try { anchors.add(new URL(href, document.baseURI).href); } catch(e) {}
     }
   });
   // 2. data-href, data-to, data-url attributes (common in SPA frameworks)
   document.querySelectorAll('[data-href],[data-to],[data-url],[data-link]').forEach(el => {
     const href = el.getAttribute('data-href') || el.getAttribute('data-to') || el.getAttribute('data-url') || el.getAttribute('data-link');
     if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
-      try { links.add(new URL(href, document.baseURI).href); } catch(e) {}
+      try { attributeHints.add(new URL(href, document.baseURI).href); } catch(e) {}
     }
   });
   // 3. onclick handlers containing route navigation
@@ -74,7 +85,7 @@ DOM_LINK_EXTRACT_JS = """(() => {
     const onclick = el.getAttribute('onclick') || '';
     const routeMatch = onclick.match(/(?:router\\.(?:push|replace)|navigate|location\\s*=|window\\.location)\\s*\\(?\\s*['"]([^'"]+)['"]/);
     if (routeMatch) {
-      try { links.add(new URL(routeMatch[1], document.baseURI).href); } catch(e) {}
+      try { onclickHints.add(new URL(routeMatch[1], document.baseURI).href); } catch(e) {}
     }
   });
   // 4. Next.js __NEXT_DATA__ (if present)
@@ -84,8 +95,8 @@ DOM_LINK_EXTRACT_JS = """(() => {
       const data = JSON.parse(nextData.textContent);
       const walk = (obj) => {
         if (!obj || typeof obj !== 'object') return;
-        if (typeof obj.href === 'string' && obj.href.startsWith('/')) links.add(new URL(obj.href, document.baseURI).href);
-        if (typeof obj.as === 'string' && obj.as.startsWith('/')) links.add(new URL(obj.as, document.baseURI).href);
+        if (typeof obj.href === 'string' && obj.href.startsWith('/')) frameworkHints.add(new URL(obj.href, document.baseURI).href);
+        if (typeof obj.as === 'string' && obj.as.startsWith('/')) frameworkHints.add(new URL(obj.as, document.baseURI).href);
         Object.values(obj).forEach(walk);
       };
       walk(data);
@@ -96,21 +107,32 @@ DOM_LINK_EXTRACT_JS = """(() => {
     if (window.__NUXT__ && window.__NUXT__.data) {
       const walk = (obj) => {
         if (!obj || typeof obj !== 'object') return;
-        if (typeof obj.path === 'string' && obj.path.startsWith('/')) links.add(new URL(obj.path, document.baseURI).href);
-        if (typeof obj.to === 'string' && obj.to.startsWith('/')) links.add(new URL(obj.to, document.baseURI).href);
+        if (typeof obj.path === 'string' && obj.path.startsWith('/')) frameworkHints.add(new URL(obj.path, document.baseURI).href);
+        if (typeof obj.to === 'string' && obj.to.startsWith('/')) frameworkHints.add(new URL(obj.to, document.baseURI).href);
         Object.values(obj).forEach(walk);
       };
       walk(window.__NUXT__);
     }
   } catch(e) {}
-  return JSON.stringify([...links]);
+  return JSON.stringify({
+    anchors: [...anchors],
+    attribute_hints: [...attributeHints],
+    onclick_hints: [...onclickHints],
+    framework_hints: [...frameworkHints]
+  });
 })()"""
 
 
-def extract_dom_links_via_agent_browser(timeout: int = 15, auto_connect: bool = False) -> list[str]:
-    """Extract navigable links from the current page DOM via agent-browser JS eval."""
+def extract_dom_links_via_agent_browser(timeout: int = 15, auto_connect: bool = False) -> dict[str, list[str]]:
+    """Extract rendered anchors and SPA route hints from the current page DOM."""
+    empty = {
+        "anchors": [],
+        "attribute_hints": [],
+        "onclick_hints": [],
+        "framework_hints": [],
+    }
     if not shutil.which("agent-browser"):
-        return []
+        return empty
     try:
         result = _run_agent_browser(
             ["eval", DOM_LINK_EXTRACT_JS, "--json"],
@@ -118,19 +140,25 @@ def extract_dom_links_via_agent_browser(timeout: int = 15, auto_connect: bool = 
             auto_connect=auto_connect,
         )
         if result.returncode != 0:
-            return []
+            return empty
         try:
             data = json.loads(result.stdout)
-            links_str = data.get("data", data.get("result", "[]"))
-            if isinstance(links_str, str):
-                return json.loads(links_str)
-            if isinstance(links_str, list):
-                return links_str
+            links_value = data.get("data", data.get("result", "{}"))
+            if isinstance(links_value, str):
+                links_value = json.loads(links_value)
+            if isinstance(links_value, list):
+                legacy = list(dict.fromkeys(str(item) for item in links_value))
+                return {**empty, "anchors": legacy}
+            if isinstance(links_value, dict):
+                return {
+                    key: list(dict.fromkeys(str(item) for item in links_value.get(key, []) if item))
+                    for key in empty
+                }
         except (json.JSONDecodeError, TypeError):
             pass
-        return []
+        return empty
     except Exception:
-        return []
+        return empty
 
 
 def scroll_and_wait(wait_ms: int = 3000, timeout: int = 15, auto_connect: bool = False) -> bool:
@@ -452,6 +480,14 @@ def _fetch_urllib(url: str, user_agent: str = DEFAULT_UA, timeout: int = FETCH_T
         }
 
 
+def fetch_raw_http(url: str, user_agent: str = SEARCH_ENGINE_UA, timeout: int = FETCH_TIMEOUT) -> dict:
+    """Fetch the unrendered HTTP response for search-engine baseline evidence."""
+    result = _fetch_urllib(url, user_agent=user_agent, timeout=timeout)
+    result["fetcher"] = "raw_http"
+    result["user_agent"] = user_agent
+    return result
+
+
 def _fetch_scrapling(url: str, timeout: int = FETCH_TIMEOUT) -> dict | None:
     """Fetch with Scrapling StealthyFetcher (Camoufox) — full JS rendering."""
     try:
@@ -625,9 +661,9 @@ def fetch_with_spa_recovery(
     attempts recovery via:
       1. Re-fetch with Scrapling (longer timeout) if the first fetcher wasn't Scrapling
       2. Scroll + wait + re-extract via agent-browser
-      3. DOM link extraction via JS eval (links stored in result["dom_links"])
+      3. DOM route hint extraction via JS eval (stored in result["dom_link_hints"])
 
-    Returns the same dict as fetch_rendered, plus optional "dom_links" key.
+    Returns the same dict as fetch_rendered, plus optional "dom_link_hints" key.
     """
     result = fetch_rendered(url, user_agent=user_agent, timeout=timeout, preferred_fetcher=preferred_fetcher)
 
@@ -641,8 +677,8 @@ def fetch_with_spa_recovery(
         if fetcher in ("agent_browser", "chrome"):
             auto = fetcher == "chrome"
             dom_links = extract_dom_links_via_agent_browser(auto_connect=auto)
-            if dom_links:
-                result["dom_links"] = dom_links
+            if any(dom_links.values()):
+                result["dom_link_hints"] = dom_links
         return result
 
     print(f"[fetchers] SPA shell detected for {url} (words={words}, scripts={scripts}), attempting recovery...")
@@ -706,8 +742,8 @@ def fetch_with_spa_recovery(
 
             # Extract DOM links regardless
             dom_links = extract_dom_links_via_agent_browser(auto_connect=auto)
-            if dom_links:
-                result["dom_links"] = dom_links
+            if any(dom_links.values()):
+                result["dom_link_hints"] = dom_links
         except Exception as exc:
             print(f"[fetchers] Agent-browser SPA recovery failed: {exc}", file=sys.stderr)
 

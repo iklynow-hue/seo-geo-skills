@@ -23,9 +23,16 @@ It intentionally combines the strongest parts of classic technical SEO audits wi
 - trust and EEAT signals
 - mobile + desktop performance evidence from local Lighthouse or PageSpeed API
 
-## Multi-Layer Fetch Architecture
+## Search-Engine Baseline + Rendered Fetch Architecture
 
-The skill supports JS-rendered crawling through a fetcher priority chain:
+The skill keeps two evidence tracks for HTML pages:
+
+- **Search-engine baseline:** raw HTTP fetch with a Googlebot Smartphone-style user agent, no JavaScript, robots-aware, and only normal `<a href>` links counted as directly crawlable.
+- **Rendered browser evidence:** JS-rendered HTML from browser fetchers, used to inspect SPA content that humans can see after hydration.
+
+If rendered evidence shows content or routes that the search-engine baseline cannot see, treat that as a crawlability/indexability issue, not as a clean pass.
+
+Rendered fetching uses this priority chain:
 
 ```
 Scrapling (StealthyFetcher/Camoufox, JS-rendered) — primary
@@ -34,7 +41,7 @@ Scrapling (StealthyFetcher/Camoufox, JS-rendered) — primary
       → urllib.request (raw HTTP, no JS) — fallback
 ```
 
-**Why:** SPA sites (e.g., React, Angular, Vue) serve a thin JS shell in initial HTML. Raw HTTP requests see no content, no internal links, and produce shallow single-page audits. JS rendering fixes this.
+**Why:** SPA sites (e.g., React, Angular, Vue) often serve a thin JS shell in initial HTML. Raw HTTP requests may see no meaningful content or crawlable links. JS rendering helps inspect the site, but the report must still say when content depends on rendering or assisted discovery.
 
 **Scrapling** (Camoufox mode) is always the primary fetcher — it provides full JS rendering, waits for `networkIdle`, and is the most reliable for content extraction. Timeout is 35s (increased from 20s) for heavy SPAs.
 
@@ -42,7 +49,7 @@ Scrapling (StealthyFetcher/Camoufox, JS-rendered) — primary
 
 **agent-browser** is the last-resort headless browser option.
 
-**urllib** remains the innermost fallback for non-HTML resources (robots.txt, sitemaps) and when no browser is available.
+**urllib** remains the innermost fallback for raw HTTP checks, non-HTML resources (`robots.txt`, sitemaps, `llms.txt`), and when no browser is available.
 
 ### Prerequisite Detection
 
@@ -59,7 +66,7 @@ It does **not** auto-install these tools by default.
 
 ### SPA Detection
 
-After fetching each page, the crawler runs `detect_spa_shell()` which checks:
+For each page, the crawler runs `detect_spa_shell()` against the raw search-engine baseline, not just the rendered browser output. It checks:
 
 - `word_count < 100` AND `script_count >= 5` → likely SPA shell
 - `word_count < 50` AND `script_count >= 3` → thin HTML
@@ -71,13 +78,24 @@ When the initial fetch returns a thin SPA shell (word_count < 100, script_count 
 
 1. **Scrapling retry** — re-fetch with longer timeout if the first fetcher wasn't Scrapling
 2. **Scroll + wait + re-extract** — agent-browser scrolls to bottom, waits 5s for lazy content, then re-grabs HTML
-3. **DOM link extraction** — runs JS in the browser to extract navigable links from the rendered DOM, going beyond `<a href>` to catch:
+3. **DOM route hint extraction** — runs JS in the browser to find possible SPA routes, but labels them as hints rather than crawlable proof:
    - `data-href`, `data-to`, `data-url`, `data-link` attributes
    - `onclick` handlers with router navigation
    - Next.js `__NEXT_DATA__` route data
    - Nuxt.js `__NUXT__` route data
 
-DOM links are returned in `result["dom_links"]` and merged into the crawler's link discovery, so SPA navigation that doesn't use `<a href>` tags still gets found.
+DOM route hints can be used for audit sampling, but they are not counted as direct search-engine crawlability. If a page is reached only through a DOM route hint, call that out as assisted discovery.
+
+### Search Discoverability Rules
+
+For report conclusions, distinguish these link sources:
+
+- `raw_a_href` — directly visible in raw HTML and safest to count as crawlable.
+- `rendered_a_href` — visible after JavaScript rendering; useful evidence, but more fragile than raw HTML links.
+- `dom_route_hint` — inferred from `data-*`, onclick handlers, or framework state; use only as audit assistance, not as proof that search engines can crawl the route.
+- `route_guess` — guessed paths such as `/about` or `/pricing`; useful for sampling, but always report them as assisted discovery.
+
+If a page is reached only through `dom_route_hint` or `route_guess`, mark it as not search-discoverable in the sample unless a sitemap or crawlable anchor also exposes it.
 
 ### Domain-Specific Route Guessing
 
@@ -91,7 +109,7 @@ When BFS + sitemap produce too few pages, the crawler tries domain-specific rout
 
 ### Sitemap-First Fallback
 
-When BFS + route guessing produce fewer than 10 pages, the crawler aggressively tries remaining sitemap URLs that weren't visited yet. This prevents shallow audits on SPA sites where link discovery is weak.
+When BFS + route guessing produce fewer than 10 pages, the crawler aggressively tries remaining sitemap URLs that weren't visited yet. This prevents shallow audits on SPA sites where link discovery is weak, while still preserving each page's discovery source in `crawl.json`.
 
 ### Performance Evidence Modes
 
@@ -320,6 +338,8 @@ Inspect:
 - schema coverage
 - breadcrumb, author, FAQ, contact, and trust hints
 - whether meaningful body content is visible in initial HTML
+- search-engine baseline vs rendered-browser deltas
+- pages discovered only through rendered links, DOM route hints, or route guesses
 - mobile / desktop PageSpeed averages and outliers when available
 
 Use `references/scoring-rubric.md` for scoring rules.
@@ -474,7 +494,8 @@ Include everything in Operator mode plus:
 - sitemap presence and quality
 - titles and meta descriptions
 - one clear H1
-- render-visible HTML content
+- meaningful raw HTML content visible to Googlebot baseline
+- rendered content that materially exceeds raw HTML should be flagged as JS-dependent
 - duplicate metadata patterns
 - hreflang or locale consistency when relevant
 
@@ -490,6 +511,9 @@ Include everything in Operator mode plus:
 ### Information Architecture & Internal Linking
 
 - navigational discoverability
+- raw `<a href>` internal links as the strongest discovery evidence
+- rendered `<a href>` links as secondary evidence
+- DOM route hints and guessed routes as assisted discovery only
 - breadcrumbs
 - reasonable internal-link density
 - important pages reachable without deep burying
@@ -500,7 +524,8 @@ Include everything in Operator mode plus:
 - answer-first summaries
 - FAQ / definitions / facts / lists / tables
 - structured, extractable prose
-- initial HTML visibility of core facts
+- raw HTML visibility of core facts
+- clear warning when AI-readable facts only appear after JavaScript rendering
 - `llms.txt` presence if available
 - clean entity naming and context windows for retrieval
 
@@ -536,6 +561,8 @@ Include everything in Operator mode plus:
 - Keep unsupported assumptions out of the report.
 - State which URLs were crawled and which URLs were used for PageSpeed.
 - If a finding comes from a limited sample, say so.
+- If rendered-browser evidence is stronger than the raw Googlebot baseline, say that clearly and treat it as a risk.
+- Do not present `dom_route_hint` or `route_guess` pages as search-discoverable unless raw HTML links or sitemap evidence also expose them.
 
 ## Files In This Skill
 
@@ -600,15 +627,16 @@ What it does:
 
 - checks which optional fetcher prerequisites are available
 - can auto-install missing prerequisites only if `--auto-install-prereqs` is supplied
+- records a raw Googlebot-style search-engine baseline for each HTML page
 - runs the capped crawl with JS rendering via the fetcher priority chain
 - escalates from headless fetchers to attached Chrome in `auto` mode when needed
-- makes a best-effort route expansion pass for router-heavy SPAs when rendered content exists but crawlable links are sparse
+- makes a best-effort route expansion pass for router-heavy SPAs when rendered content exists but crawlable links are sparse, and labels those pages as assisted discovery
 - detects SPA shells and reports `spa_detection` per page
 - runs representative mobile + desktop performance checks unless `--skip-pagespeed` is used
 - uses local Lighthouse by default, or API / API-with-fallback when explicitly selected
 - can write `evidence-report.html` and seed `final-report.json` when `--html-report` is supplied
 - can render the final polished `audit-report.html` from `final-report.json`
-- stores `crawl.json`, `pagespeed.json`, `audit-run.json`, and any HTML report together in one output folder under `/tmp` by default
+- stores `crawl.json`, `pagespeed.json`, `audit-run.json`, and any HTML report together in one output folder under the skill's `runs/` directory by default
 
 ## Example Requests
 

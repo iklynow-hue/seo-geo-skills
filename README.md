@@ -8,6 +8,7 @@ This skill works with both Codex and Claude Code for sampled SEO + GEO audits of
 
 - capped crawling up to 50 pages
 - template-aware sampling
+- raw Googlebot-style baseline compared with rendered browser evidence
 - local Lighthouse by default
 - PageSpeed API support through a skill-local `.env`
 - final polished HTML reporting from the same structured content as the written audit
@@ -77,6 +78,7 @@ Current implementation limits to know up front:
 - default audit scope: `light=10`
 - PageSpeed / performance test URLs: default `5`, maximum `10`
 - best-effort SPA route expansion is capped and still sample-based, not a full app crawler
+- SPA route hints and guessed URLs are labeled as assisted discovery, not search-engine crawl proof
 
 ## Use Cases
 
@@ -87,6 +89,15 @@ Use `seo-geo-site-audit` when you want:
 - a sampled site-quality review instead of a full crawl
 - a scored report with evidence, issues, and recommended actions
 - HTML output for sharing
+
+## SPA And Search Crawlability
+
+The crawler now keeps two evidence tracks for each HTML page:
+
+- `search_engine_visibility`: raw Googlebot-style HTTP baseline, no JavaScript.
+- rendered browser evidence: what the SPA shows after JavaScript runs.
+
+This is intentional. Browser rendering helps inspect SPA content, but the report should treat any content, navigation, schema, or route that only appears after rendering as a risk. Pages discovered only through `dom_route_hint` or `route_guess` are audit assistance, not proof that search engines can crawl them.
 
 ## Chat Usage
 
@@ -113,6 +124,14 @@ Example:
 ```text
 Use $seo-geo-site-audit to audit https://example.com with light mode, Operator output, PageSpeed API from the skill .env, HTML report on, and final report in Chinese.
 ```
+
+Kilo Code example:
+
+```bash
+kilo run --auto --dir ~/Projects/mcmarkets 'Use $seo-geo-site-audit to audit https://www.mcmarkets.com. 要求: light mode, operator 风格, PageSpeed 用 skill .env 里的 API key, 输出 HTML 报告, 最终报告用中文. 如果这些偏好已经明确就不要重复提问只补问缺失项.'
+```
+
+Use single quotes around the prompt in a shell so `$seo-geo-site-audit` is passed literally instead of being treated as a shell variable.
 
 Default first test:
 
@@ -245,6 +264,7 @@ If you run into a bug or have a suggestion, feel free to open an issue.
 
 - 最多 50 页的上限抓取
 - 按模板类型抽样
+- 对比 raw Googlebot 风格基线和浏览器渲染证据
 - 默认使用本地 Lighthouse
 - 通过技能目录下的 `.env` 接入 PageSpeed API
 - 基于与终端报告相同结构内容生成最终 HTML 报告
@@ -314,6 +334,7 @@ Use $seo-geo-site-audit to audit https://example.com
 - 默认抓取范围：`light=10`
 - PageSpeed / 性能检测 URL 数：默认 `5`，最大 `10`
 - SPA 的最佳努力扩展仍然是采样逻辑，不是完整应用爬虫
+- SPA 路由 hints 和猜测路径会标记为辅助发现，不会当成搜索引擎可爬证明
 
 ## 适用场景
 
@@ -324,6 +345,15 @@ Use $seo-geo-site-audit to audit https://example.com
 - 采样式站点质量检查，而不是全站爬取
 - 带评分、证据、问题和修复建议的结构化报告
 - HTML 报告导出
+
+## SPA 与搜索爬取能力
+
+爬虫现在会为每个 HTML 页面保留两条证据线：
+
+- `search_engine_visibility`：raw Googlebot 风格 HTTP 基线，不执行 JavaScript。
+- 浏览器渲染证据：SPA 在 JavaScript 运行后展示给用户的内容。
+
+这样做是为了避免把“浏览器能看到”误判成“搜索引擎一定能稳定看到”。如果内容、导航、结构化数据或路由只在渲染后出现，报告应该把它当作风险说明。只通过 `dom_route_hint` 或 `route_guess` 找到的页面属于审计辅助发现，不应写成搜索引擎可直接爬取。
 
 ## 聊天中使用
 
@@ -369,6 +399,14 @@ Use $seo-geo-site-audit to audit https://example.com
 - 终端中的最终报告与最终 HTML 报告应该使用同一种语言
 - 英文和中文是内置的一等选项
 - 如果用户输入其他语言，agent 仍可先写结构化 `final-report.json`，再渲染出同语言 HTML
+
+Kilo Code 示例：
+
+```bash
+kilo run --auto --dir ~/Projects/mcmarkets 'Use $seo-geo-site-audit to audit https://www.mcmarkets.com. 要求: light mode, operator 风格, PageSpeed 用 skill .env 里的 API key, 输出 HTML 报告, 最终报告用中文. 如果这些偏好已经明确就不要重复提问只补问缺失项.'
+```
+
+在 shell 里建议用单引号包住 prompt，确保 `$seo-geo-site-audit` 不会被当成环境变量展开。
 
 如果 agent 没有主动逐项提问，可以更明确地这样说：
 
