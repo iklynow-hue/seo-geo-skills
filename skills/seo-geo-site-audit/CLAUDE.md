@@ -30,6 +30,9 @@ Workflow summary:
 
 - Crawl a capped representative sample up to 50 pages.
 - For router-heavy SPAs or local apps, use best-effort browser discovery before settling for a weak one-page sample.
+- The crawler has an SPA recovery layer: if the initial fetch returns a thin shell, it retries with Scrapling (longer timeout), scroll+wait+re-extract via agent-browser, and DOM link extraction (catches data-href, onclick routes, Next.js/Nuxt router data).
+- Domain-specific route templates are tried when BFS + sitemap produce too few pages (crypto, saas, ecommerce, fintech, media).
+- Sitemap-first fallback kicks in when fewer than 10 pages are discovered.
 - Review technical SEO, on-page packaging, IA/internal linking, GEO extractability, EEAT/trust, structured data, and performance evidence.
 - Produce Operator mode by default unless the user asks for Boss or Specialist.
 - Treat all findings as sample-based evidence, not a complete site index.

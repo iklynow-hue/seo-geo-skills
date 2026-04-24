@@ -18,7 +18,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 # Import unified fetcher
-from fetchers import fetch_rendered, detect_spa_shell, DEFAULT_UA as FETCHERS_UA
+from fetchers import fetch_rendered, fetch_with_spa_recovery, detect_spa_shell, DEFAULT_UA as FETCHERS_UA
 
 DEFAULT_UA = FETCHERS_UA
 TIMEOUT = 30
@@ -78,6 +78,60 @@ COMMON_ROUTE_GUESSES = (
     "vault",
     "points",
 )
+
+# Domain-specific route templates for sites where COMMON_ROUTE_GUESSES is too generic.
+# Key is a keyword found in the homepage title/meta/domain; value is extra paths to try.
+DOMAIN_ROUTE_TEMPLATES: dict[str, list[str]] = {
+    "crypto": [
+        "markets", "market", "trade", "trading", "exchange", "spot", "futures",
+        "perpetual", "swap", "convert", "earn", "staking", "savings", "vault",
+        "launchpad", "launchpool", "nft", "defi", "web3", "wallet", "portfolio",
+        "deposit", "withdraw", "transfer", "referral", "rewards", "vip",
+        "api", "api-docs", "whitepaper", "token", "coins", "pairs",
+    ],
+    "saas": [
+        "product", "features", "solutions", "pricing", "plans", "enterprise",
+        "integrations", "plugins", "api", "developers", "docs", "changelog",
+        "status", "roadmap", "customers", "case-studies", "partners",
+        "signup", "sign-up", "register", "login", "demo", "free-trial",
+    ],
+    "ecommerce": [
+        "shop", "store", "products", "categories", "collections", "deals",
+        "sale", "cart", "checkout", "account", "orders", "shipping",
+        "returns", "size-guide", "reviews", "brands", "new-arrivals",
+        "best-sellers", "gift-cards", "wishlist",
+    ],
+    "fintech": [
+        "accounts", "cards", "loans", "mortgage", "invest", "investing",
+        "stocks", "etf", "crypto", "banking", "savings", "checking",
+        "insurance", "wealth", "robo-advisor", "portfolio", "transfer",
+        "fees", "rates", "calculator", "app", "security",
+    ],
+    "media": [
+        "articles", "news", "stories", "videos", "podcasts", "newsletter",
+        "topics", "categories", "trending", "latest", "editors-picks",
+        "authors", "contributors", "subscribe", "membership", "archive",
+    ],
+}
+
+
+def detect_site_domain_type(url: str, homepage_text: str) -> str | None:
+    """Detect site category from URL and homepage content for domain-specific route guessing."""
+    combined = (url + " " + homepage_text[:2000]).lower()
+    signals = {
+        "crypto": ["crypto", "bitcoin", "btc", "ethereum", "defi", "blockchain", "token", "swap", "staking", "futures", "perpetual", "web3"],
+        "saas": ["saas", "software", "platform", "dashboard", "api", "subscription", "enterprise", "cloud"],
+        "ecommerce": ["shop", "store", "cart", "checkout", "product", "buy", "order", "shipping", "delivery"],
+        "fintech": ["bank", "finance", "invest", "stock", "trading", "loan", "mortgage", "payment", "fintech"],
+        "media": ["news", "article", "blog", "magazine", "publish", "editorial", "journalist", "podcast"],
+    }
+    scores: dict[str, int] = {}
+    for category, keywords in signals.items():
+        scores[category] = sum(1 for kw in keywords if kw in combined)
+    best = max(scores, key=scores.get)  # type: ignore[arg-type]
+    if scores[best] >= 3:
+        return best
+    return None
 
 
 def now_iso() -> str:
@@ -186,7 +240,7 @@ def guess_locale_prefix(url: str) -> str:
     return ""
 
 
-def build_route_guesses(start_url: str, page: dict) -> list[str]:
+def build_route_guesses(start_url: str, page: dict, domain_type: str | None = None) -> list[str]:
     parsed = urllib.parse.urlsplit(start_url)
     site_root = f"{parsed.scheme}://{parsed.netloc}"
     final_url = canonicalize_url(page.get("url", start_url))
@@ -197,10 +251,20 @@ def build_route_guesses(start_url: str, page: dict) -> list[str]:
     if canonical:
         guesses.append(canonicalize_url(canonical))
 
+    # Generic routes
     for route in COMMON_ROUTE_GUESSES:
         for prefix in ("", locale_prefix):
             path = f"{prefix}/{route}" if prefix else f"/{route}"
             guesses.append(canonicalize_url(urllib.parse.urljoin(site_root, path)))
+
+    # Domain-specific routes
+    if domain_type and domain_type in DOMAIN_ROUTE_TEMPLATES:
+        for route in DOMAIN_ROUTE_TEMPLATES[domain_type]:
+            for prefix in ("", locale_prefix):
+                path = f"{prefix}/{route}" if prefix else f"/{route}"
+                guess = canonicalize_url(urllib.parse.urljoin(site_root, path))
+                if guess not in guesses:
+                    guesses.append(guess)
 
     start_canonical = canonicalize_url(start_url)
     return list(dict.fromkeys(url for url in guesses if same_origin(start_url, url) and url != start_canonical))
@@ -339,7 +403,7 @@ def fetch(url: str, user_agent: str, timeout: int = TIMEOUT, preferred_fetcher: 
     """Fetch a URL using the unified fetcher (JS rendering when available).
 
     For robots.txt and sitemaps, always uses urllib (no JS needed).
-    For page content, uses the preferred fetcher chain.
+    For HTML page content, uses fetch_with_spa_recovery for SPA shell detection.
     """
     # For non-HTML resources (robots.txt, sitemaps), use urllib directly
     parsed = urllib.parse.urlsplit(url)
@@ -349,7 +413,7 @@ def fetch(url: str, user_agent: str, timeout: int = TIMEOUT, preferred_fetcher: 
     if is_non_html or preferred_fetcher == "urllib":
         return _fetch_urllib_raw(url, user_agent, timeout)
 
-    return fetch_rendered(url, user_agent=user_agent, timeout=timeout, preferred_fetcher=preferred_fetcher)
+    return fetch_with_spa_recovery(url, user_agent=user_agent, timeout=timeout, preferred_fetcher=preferred_fetcher)
 
 
 def _fetch_urllib_raw(url: str, user_agent: str, timeout: int = TIMEOUT) -> dict:
@@ -562,10 +626,20 @@ def analyze_page(url: str, user_agent: str, start_url: str, preferred_fetcher: s
 
     internal_links = []
     external_links = 0
+    # Collect links from HTML parser
+    parser_link_set: set[str] = set()
     for href in parser.links:
         joined = safe_join(response["final_url"], href)
         if not joined:
             continue
+        parser_link_set.add(joined)
+    # Merge DOM links extracted via JS (for SPA sites where <a href> is sparse)
+    dom_links = response.get("dom_links", [])
+    for href in dom_links:
+        joined = safe_join(response["final_url"], href)
+        if joined:
+            parser_link_set.add(joined)
+    for joined in parser_link_set:
         if same_origin(start_url, joined):
             internal_links.append(joined)
         else:
@@ -763,6 +837,8 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
     route_guess_pages_enqueued = 0
     best_effort_route_guessing_used = False
     browser_escalation_used = False
+    sitemap_fallback_used = False
+    domain_type: str | None = None
 
     while queue and len(pages) < max_pages:
         current = queue.popleft()
@@ -841,17 +917,24 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
             }
             discovered_links = []
         pages.append(page)
+
+        # Detect domain type from homepage for route guessing
+        if len(pages) == 1 and not domain_type:
+            domain_type = detect_site_domain_type(start_url, page.get("title", "") + " " + page.get("meta_description", ""))
+
         for link in discovered_links:
             if link not in seen and link not in queue:
                 queue.append(link)
                 bfs_discovered += 1
 
+        # Browser escalation: relax condition — trigger for any browser-backed fetcher
+        # when homepage has weak content and no links discovered
         needs_browser_escalation = (
             preferred_fetcher == "auto"
             and current == canonicalize_url(start_url)
             and len(pages) == 1
-            and page.get("fetcher") == "agent_browser"
             and not discovered_links
+            and page.get("fetcher") in {"scrapling", "lightpanda", "agent_browser"}
             and (
                 page.get("word_count", 0) < 40
                 or not page.get("title")
@@ -877,7 +960,11 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
         browser_backed_fetch = page.get("fetcher") in {"scrapling", "lightpanda", "agent_browser", "chrome"}
         stalled_discovery = len(pages) == 1 and not discovered_links and not queue
         if browser_backed_fetch and has_rendered_content and stalled_discovery:
-            guesses = build_route_guesses(start_url, page)[: max(4, min(max_pages * 3, 12))]
+            # Use larger limit when domain-specific routes are available
+            guess_limit = max(4, min(max_pages * 3, 12))
+            if domain_type:
+                guess_limit = max(guess_limit, min(max_pages * 4, 30))
+            guesses = build_route_guesses(start_url, page, domain_type=domain_type)[:guess_limit]
             if guesses:
                 best_effort_route_guessing_used = True
                 route_guess_candidates_considered += len(guesses)
@@ -885,6 +972,31 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
                     if guess not in seen and guess not in queue:
                         queue.append(guess)
                         route_guess_pages_enqueued += 1
+
+    # Sitemap-first fallback: if BFS + route guessing produced too few pages,
+    # aggressively add remaining sitemap URLs that weren't tried yet
+    if len(pages) < min(max_pages, 10) and robots_bundle["urls"]:
+        sitemap_fallback_used = True
+        remaining_sitemap = [
+            canonicalize_url(u) for u in robots_bundle["urls"]
+            if canonicalize_url(u) not in seen and same_origin(start_url, u) and looks_like_html_url(u)
+        ]
+        remaining_sitemap = interleave_by_template(remaining_sitemap, start_url, max_pages - len(pages))
+        for url in remaining_sitemap:
+            if len(pages) >= max_pages:
+                break
+            if url in seen:
+                continue
+            seen.add(url)
+            try:
+                page, discovered_links = analyze_page(url, user_agent, start_url, preferred_fetcher=preferred_fetcher)
+                pages.append(page)
+                for link in discovered_links:
+                    if link not in seen and link not in queue:
+                        queue.append(link)
+                        bfs_discovered += 1
+            except Exception:
+                continue
 
     result = {
         "target_url": start_url,
@@ -901,6 +1013,8 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
             "route_guess_candidates_considered": route_guess_candidates_considered,
             "route_guess_pages_enqueued": route_guess_pages_enqueued,
             "browser_escalation_used": browser_escalation_used,
+            "sitemap_fallback_used": sitemap_fallback_used,
+            "domain_type_detected": domain_type,
             "sample_is_page_capped": len(pages) >= max_pages,
         },
     }

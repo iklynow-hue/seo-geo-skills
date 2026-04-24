@@ -36,7 +36,7 @@ Scrapling (StealthyFetcher/Camoufox, JS-rendered) — primary
 
 **Why:** SPA sites (e.g., React, Angular, Vue) serve a thin JS shell in initial HTML. Raw HTTP requests see no content, no internal links, and produce shallow single-page audits. JS rendering fixes this.
 
-**Scrapling** (Camoufox mode) is always the primary fetcher — it provides full JS rendering, waits for `networkIdle`, and is the most reliable for content extraction.
+**Scrapling** (Camoufox mode) is always the primary fetcher — it provides full JS rendering, waits for `networkIdle`, and is the most reliable for content extraction. Timeout is 35s (increased from 20s) for heavy SPAs.
 
 **Lightpanda** is preferred as secondary because it's significantly faster than full Playwright.
 
@@ -64,6 +64,34 @@ After fetching each page, the crawler runs `detect_spa_shell()` which checks:
 - `word_count < 100` AND `script_count >= 5` → likely SPA shell
 - `word_count < 50` AND `script_count >= 3` → thin HTML
 - Results are stored in `spa_detection` field per page and aggregated in the crawl summary
+
+### SPA Recovery Layer
+
+When the initial fetch returns a thin SPA shell (word_count < 100, script_count >= 5), `fetch_with_spa_recovery()` attempts:
+
+1. **Scrapling retry** — re-fetch with longer timeout if the first fetcher wasn't Scrapling
+2. **Scroll + wait + re-extract** — agent-browser scrolls to bottom, waits 5s for lazy content, then re-grabs HTML
+3. **DOM link extraction** — runs JS in the browser to extract navigable links from the rendered DOM, going beyond `<a href>` to catch:
+   - `data-href`, `data-to`, `data-url`, `data-link` attributes
+   - `onclick` handlers with router navigation
+   - Next.js `__NEXT_DATA__` route data
+   - Nuxt.js `__NUXT__` route data
+
+DOM links are returned in `result["dom_links"]` and merged into the crawler's link discovery, so SPA navigation that doesn't use `<a href>` tags still gets found.
+
+### Domain-Specific Route Guessing
+
+When BFS + sitemap produce too few pages, the crawler tries domain-specific route templates. Site type is auto-detected from homepage content:
+
+- **crypto**: /markets, /futures, /staking, /launchpad, /swap, /earn, etc. (~30 paths)
+- **saas**: /product, /features, /pricing, /api, /changelog, etc.
+- **ecommerce**: /shop, /products, /categories, /cart, /deals, etc.
+- **fintech**: /accounts, /invest, /stocks, /loans, /calculator, etc.
+- **media**: /articles, /news, /podcasts, /topics, /subscribe, etc.
+
+### Sitemap-First Fallback
+
+When BFS + route guessing produce fewer than 10 pages, the crawler aggressively tries remaining sitemap URLs that weren't visited yet. This prevents shallow audits on SPA sites where link discovery is weak.
 
 ### Performance Evidence Modes
 

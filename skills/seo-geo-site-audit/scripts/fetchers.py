@@ -36,7 +36,7 @@ LIGHTPANDA_CDP_PORT = 19222
 DEFAULT_UA = "seo-geo-site-audit/1.0 (+https://example.invalid)"
 MAX_BODY_CHARS = 250_000
 FETCH_TIMEOUT = 30
-SCRAPLING_NETWORK_IDLE_TIMEOUT = 20_000  # ms
+SCRAPLING_NETWORK_IDLE_TIMEOUT = 35_000  # ms — heavier SPAs need more time
 
 # Lightpanda nightly download URLs
 LIGHTPANDA_URLS = {
@@ -45,6 +45,112 @@ LIGHTPANDA_URLS = {
     ("Linux", "x86_64"): "https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-x86_64-linux",
     ("Linux", "aarch64"): "https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-aarch64-linux",
 }
+
+
+# ---------------------------------------------------------------------------
+# DOM link extraction (for SPA-heavy sites)
+# ---------------------------------------------------------------------------
+
+# JS snippet that extracts all navigable links from the rendered DOM.
+# Goes beyond <a href> to catch SPA router links, data attributes, etc.
+DOM_LINK_EXTRACT_JS = """(() => {
+  const links = new Set();
+  // 1. Standard <a href> tags
+  document.querySelectorAll('a[href]').forEach(a => {
+    const href = a.getAttribute('href');
+    if (href && !href.startsWith('#') && !href.startsWith('javascript:') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
+      try { links.add(new URL(href, document.baseURI).href); } catch(e) {}
+    }
+  });
+  // 2. data-href, data-to, data-url attributes (common in SPA frameworks)
+  document.querySelectorAll('[data-href],[data-to],[data-url],[data-link]').forEach(el => {
+    const href = el.getAttribute('data-href') || el.getAttribute('data-to') || el.getAttribute('data-url') || el.getAttribute('data-link');
+    if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+      try { links.add(new URL(href, document.baseURI).href); } catch(e) {}
+    }
+  });
+  // 3. onclick handlers containing route navigation
+  document.querySelectorAll('[onclick]').forEach(el => {
+    const onclick = el.getAttribute('onclick') || '';
+    const routeMatch = onclick.match(/(?:router\\.(?:push|replace)|navigate|location\\s*=|window\\.location)\\s*\\(?\\s*['"]([^'"]+)['"]/);
+    if (routeMatch) {
+      try { links.add(new URL(routeMatch[1], document.baseURI).href); } catch(e) {}
+    }
+  });
+  // 4. Next.js __NEXT_DATA__ (if present)
+  try {
+    const nextData = document.getElementById('__NEXT_DATA__');
+    if (nextData) {
+      const data = JSON.parse(nextData.textContent);
+      const walk = (obj) => {
+        if (!obj || typeof obj !== 'object') return;
+        if (typeof obj.href === 'string' && obj.href.startsWith('/')) links.add(new URL(obj.href, document.baseURI).href);
+        if (typeof obj.as === 'string' && obj.as.startsWith('/')) links.add(new URL(obj.as, document.baseURI).href);
+        Object.values(obj).forEach(walk);
+      };
+      walk(data);
+    }
+  } catch(e) {}
+  // 5. Nuxt.js __NUXT__ (if present)
+  try {
+    if (window.__NUXT__ && window.__NUXT__.data) {
+      const walk = (obj) => {
+        if (!obj || typeof obj !== 'object') return;
+        if (typeof obj.path === 'string' && obj.path.startsWith('/')) links.add(new URL(obj.path, document.baseURI).href);
+        if (typeof obj.to === 'string' && obj.to.startsWith('/')) links.add(new URL(obj.to, document.baseURI).href);
+        Object.values(obj).forEach(walk);
+      };
+      walk(window.__NUXT__);
+    }
+  } catch(e) {}
+  return JSON.stringify([...links]);
+})()"""
+
+
+def extract_dom_links_via_agent_browser(timeout: int = 15, auto_connect: bool = False) -> list[str]:
+    """Extract navigable links from the current page DOM via agent-browser JS eval."""
+    if not shutil.which("agent-browser"):
+        return []
+    try:
+        result = _run_agent_browser(
+            ["eval", DOM_LINK_EXTRACT_JS, "--json"],
+            timeout=timeout,
+            auto_connect=auto_connect,
+        )
+        if result.returncode != 0:
+            return []
+        try:
+            data = json.loads(result.stdout)
+            links_str = data.get("data", data.get("result", "[]"))
+            if isinstance(links_str, str):
+                return json.loads(links_str)
+            if isinstance(links_str, list):
+                return links_str
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return []
+    except Exception:
+        return []
+
+
+def scroll_and_wait(wait_ms: int = 3000, timeout: int = 15, auto_connect: bool = False) -> bool:
+    """Scroll to bottom of page and wait for lazy content to load."""
+    if not shutil.which("agent-browser"):
+        return False
+    scroll_js = """(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+      return document.body.scrollHeight;
+    })()"""
+    try:
+        _run_agent_browser(
+            ["eval", scroll_js, "--json"],
+            timeout=timeout,
+            auto_connect=auto_connect,
+        )
+        time.sleep(wait_ms / 1000)
+        return True
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -488,6 +594,124 @@ def _fetch_agent_browser(url: str, timeout: int = FETCH_TIMEOUT, auto_connect: b
         label = "attached Chrome" if auto_connect else "agent-browser"
         print(f"[fetchers] {label} fetch error for {url}: {exc}", file=sys.stderr)
         return None
+
+
+# ---------------------------------------------------------------------------
+# SPA-aware fetch with recovery
+# ---------------------------------------------------------------------------
+
+def _count_words_quick(text: str) -> int:
+    """Fast word count on raw HTML text (approximate, before full parsing)."""
+    import re as _re
+    # Strip tags roughly
+    stripped = _re.sub(r"<[^>]+>", " ", text)
+    return len(_re.findall(r"\b[\w-]+\b", stripped))
+
+
+def _count_scripts_quick(text: str) -> int:
+    """Count <script> tags in raw HTML."""
+    return text.lower().count("<script")
+
+
+def fetch_with_spa_recovery(
+    url: str,
+    user_agent: str = DEFAULT_UA,
+    timeout: int = FETCH_TIMEOUT,
+    preferred_fetcher: str = "auto",
+) -> dict:
+    """Fetch a URL with SPA shell detection and recovery.
+
+    If the initial fetch returns a thin SPA shell (< 100 words, >= 5 scripts),
+    attempts recovery via:
+      1. Re-fetch with Scrapling (longer timeout) if the first fetcher wasn't Scrapling
+      2. Scroll + wait + re-extract via agent-browser
+      3. DOM link extraction via JS eval (links stored in result["dom_links"])
+
+    Returns the same dict as fetch_rendered, plus optional "dom_links" key.
+    """
+    result = fetch_rendered(url, user_agent=user_agent, timeout=timeout, preferred_fetcher=preferred_fetcher)
+
+    words = _count_words_quick(result.get("text", ""))
+    scripts = _count_scripts_quick(result.get("text", ""))
+    is_shell = (scripts >= 5 and words < 100) or (words < 50 and scripts >= 3)
+
+    if not is_shell:
+        # Still try DOM link extraction for browser-backed fetchers to catch SPA nav
+        fetcher = result.get("fetcher", "urllib")
+        if fetcher in ("agent_browser", "chrome"):
+            auto = fetcher == "chrome"
+            dom_links = extract_dom_links_via_agent_browser(auto_connect=auto)
+            if dom_links:
+                result["dom_links"] = dom_links
+        return result
+
+    print(f"[fetchers] SPA shell detected for {url} (words={words}, scripts={scripts}), attempting recovery...")
+
+    # Recovery strategy 1: try Scrapling with longer timeout if not already used
+    if result.get("fetcher") != "scrapling":
+        try:
+            scrapling_result = _fetch_scrapling(url, timeout=FETCH_TIMEOUT + 10)
+            if scrapling_result:
+                s_words = _count_words_quick(scrapling_result.get("text", ""))
+                s_scripts = _count_scripts_quick(scrapling_result.get("text", ""))
+                if s_words > words or (s_scripts < scripts and s_words >= 50):
+                    print(f"[fetchers] Scrapling recovery improved: words {words}→{s_words}")
+                    result = scrapling_result
+                    words = s_words
+                    scripts = s_scripts
+        except Exception:
+            pass
+
+    # Recovery strategy 2: agent-browser with scroll + wait
+    if shutil.which("agent-browser"):
+        try:
+            # Open the page
+            auto = result.get("fetcher") == "chrome"
+            _run_agent_browser(["open", url], timeout=timeout, auto_connect=auto)
+            _run_agent_browser(["wait", "--load", "networkidle"], timeout=timeout, auto_connect=auto)
+            # Scroll to trigger lazy content
+            scroll_and_wait(wait_ms=3000, auto_connect=auto)
+            # Wait a bit more for API calls triggered by scroll
+            time.sleep(2)
+            # Re-extract HTML
+            eval_result = _run_agent_browser(
+                ["eval", "document.documentElement.outerHTML", "--json"],
+                timeout=15,
+                auto_connect=auto,
+            )
+            if eval_result.returncode == 0:
+                try:
+                    data = json.loads(eval_result.stdout)
+                    html_text = data.get("data", data.get("result", eval_result.stdout))
+                    if isinstance(html_text, dict):
+                        html_text = html_text.get("result") or html_text.get("html") or html_text.get("outerHTML") or ""
+                except json.JSONDecodeError:
+                    html_text = eval_result.stdout
+
+                if isinstance(html_text, str) and html_text.strip():
+                    r_words = _count_words_quick(html_text)
+                    r_scripts = _count_scripts_quick(html_text)
+                    if r_words > words or (r_scripts < scripts and r_words >= 50):
+                        print(f"[fetchers] Agent-browser scroll recovery improved: words {words}→{r_words}")
+                        result = {
+                            "final_url": url,
+                            "status": 200,
+                            "headers": {},
+                            "content_type": "text/html",
+                            "text": compact_html_for_analysis(html_text),
+                            "bytes": len(html_text.encode("utf-8", errors="replace")),
+                            "fetcher": "chrome" if auto else "agent_browser",
+                        }
+                        words = r_words
+
+            # Extract DOM links regardless
+            dom_links = extract_dom_links_via_agent_browser(auto_connect=auto)
+            if dom_links:
+                result["dom_links"] = dom_links
+        except Exception as exc:
+            print(f"[fetchers] Agent-browser SPA recovery failed: {exc}", file=sys.stderr)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
