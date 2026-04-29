@@ -146,6 +146,7 @@ Use `--pagespeed-provider local` for local-only runs, `--pagespeed-provider api`
 PageSpeed API improvements:
 - Timeout increased from 20s to 45s
 - Retries increased from 2 to 3 with exponential backoff (2s, 4s, 8s)
+- Default URL coverage is homepage-only: one URL tested with both mobile and desktop strategies. Use `--max-pagespeed-urls` only when you explicitly need extra template performance coverage.
 
 ## Guardrails
 
@@ -611,6 +612,7 @@ For a simpler CLI flow, use the wrapper script:
 |---|---|
 | `--fetcher auto\|scrapling\|lightpanda\|agent_browser\|chrome\|urllib` | Preferred fetcher. Default: `auto` (tries all in priority order, including attached Chrome) |
 | `--pagespeed-provider local\|api\|api_with_fallback` | Performance evidence source. Default: `local` |
+| `--max-pagespeed-urls 1-10` | Maximum PageSpeed URLs. Default: `1` homepage URL, tested once on mobile and once on desktop. |
 | `--report-language <language>` | Wrapper evidence HTML language and seeded `final-report.json` language. The final polished report HTML should come from `final-report.json` + `render-report-html` |
 | `--local-lighthouse-fallback` | Compatibility alias for `--pagespeed-provider api_with_fallback` |
 | `--skip-prereq-check` | Skip prerequisite detection |
@@ -649,7 +651,7 @@ What it does:
 - escalates from headless fetchers to attached Chrome in `auto` mode when needed
 - makes a best-effort route expansion pass for router-heavy SPAs when rendered content exists but crawlable links are sparse, and labels those pages as assisted discovery
 - detects SPA shells and reports `spa_detection` per page
-- runs representative mobile + desktop performance checks unless `--skip-pagespeed` is used
+- runs homepage mobile + desktop performance checks unless `--skip-pagespeed` is used
 - uses local Lighthouse by default, or API / API-with-fallback when explicitly selected
 - can write `evidence-report.html` and seed `final-report.json` when `--html-report` is supplied
 - can render the final polished `audit-report.html` from `final-report.json`

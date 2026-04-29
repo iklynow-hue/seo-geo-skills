@@ -76,7 +76,7 @@ Current implementation limits to know up front:
 - crawl cap: `1` to `50` pages
 - audit presets: `fast=1`, `light=10`, `template=50`
 - default audit scope: `light=10`
-- PageSpeed / performance test URLs: default `5`, maximum `10`
+- PageSpeed / performance test URLs: default `1` homepage URL, maximum `10`
 - best-effort SPA route expansion is capped and still sample-based, not a full app crawler
 - SPA route hints and guessed URLs are labeled as assisted discovery, not search-engine crawl proof
 
@@ -146,6 +146,8 @@ Current performance choices:
 - `2. Skip PageSpeed`
 - `3. Use PageSpeed API from the skill .env`
 
+Performance collection defaults to the landing page only. The wrapper tests one homepage URL with both mobile and desktop strategies, which keeps audits fast and avoids repeated API delays on heavy SPA routes. Use `--max-pagespeed-urls` only when you explicitly need extra template coverage.
+
 If you choose the API path, save the key in:
 
 - `skills/seo-geo-site-audit/.env`
@@ -202,7 +204,7 @@ Useful options:
 - `--mode fast|light|template` which map to `1`, `10`, and `50` pages
 - `--max-pages 1-50`
 - `--output-style boss|operator|specialist`
-- `--max-pagespeed-urls 1-10`
+- `--max-pagespeed-urls 1-10` (default `1`; homepage only, tested once on mobile and once on desktop)
 - `--pagespeed-provider local|api|api_with_fallback`
 - `--skip-pagespeed`
 - `--html-report`
@@ -332,7 +334,7 @@ Use $seo-geo-site-audit to audit https://example.com
 - 抓取页数范围：`1` 到 `50`
 - 预设模式：`fast=1`、`light=10`、`template=50`
 - 默认抓取范围：`light=10`
-- PageSpeed / 性能检测 URL 数：默认 `5`，最大 `10`
+- PageSpeed / 性能检测 URL 数：默认 `1` 个首页 URL，最大 `10`
 - SPA 的最佳努力扩展仍然是采样逻辑，不是完整应用爬虫
 - SPA 路由 hints 和猜测路径会标记为辅助发现，不会当成搜索引擎可爬证明
 
@@ -383,6 +385,8 @@ Use $seo-geo-site-audit to audit https://example.com
 - `1. Local Lighthouse (default)`
 - `2. Skip PageSpeed`
 - `3. Use PageSpeed API from the skill .env`
+
+性能采集默认只测 landing page / 首页。包装脚本会对 1 个首页 URL 分别跑 mobile 和 desktop，这样可以避免重型 SPA 路由导致 PageSpeed API 长时间卡住。只有在明确需要额外模板覆盖时，再使用 `--max-pagespeed-urls` 提高 URL 数量。
 
 如果你选择 API 路径，请先把 key 保存到：
 
@@ -448,7 +452,7 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 - `--mode fast|light|template`，分别对应 `1`、`10`、`50` 页
 - `--max-pages 1-50`
 - `--output-style boss|operator|specialist`
-- `--max-pagespeed-urls 1-10`
+- `--max-pagespeed-urls 1-10`（默认 `1`；只测首页，并分别跑 mobile 和 desktop）
 - `--pagespeed-provider local|api|api_with_fallback`
 - `--skip-pagespeed`
 - `--html-report`

@@ -129,6 +129,23 @@ def pick_urls_from_crawl(crawl_path: str, max_urls: int) -> list[str]:
             chosen.append(url)
             seen_templates.add(template)
 
+    # Performance evidence defaults to the landing page. Most audit value comes
+    # from the homepage experience, and API/local Lighthouse runs are expensive
+    # on JS-heavy sites. If callers request more URLs, we still add template
+    # examples below.
+    for page in pages:
+        if page.get("status") == 200 and page.get("discovery_source") == "start":
+            add(page.get("url", ""), page.get("template", "homepage"))
+            break
+
+    for page in pages:
+        if page.get("status") == 200 and page.get("template") == "homepage":
+            add(page.get("url", ""), "homepage")
+            break
+
+    if len(chosen) >= max_urls:
+        return chosen[:max_urls]
+
     for preferred in ("homepage", "pricing", "product", "docs", "blog", "trust", "other"):
         for page in pages:
             if page.get("status") == 200 and page.get("template") == preferred:
@@ -297,8 +314,13 @@ def run_local_lighthouse_fallback(url: str, strategy: str, timeout: int = 120) -
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run PageSpeed Insights for a set of URLs.")
     parser.add_argument("--url", action="append", default=[], help="URL to test. May be supplied multiple times.")
-    parser.add_argument("--from-crawl", help="Read representative URLs from crawl_sample.py JSON output.")
-    parser.add_argument("--max-urls", type=int, default=5, help="Maximum number of URLs to test.")
+    parser.add_argument("--from-crawl", help="Read homepage-first URLs from crawl_sample.py JSON output.")
+    parser.add_argument(
+        "--max-urls",
+        type=int,
+        default=1,
+        help="Maximum number of URLs to test. Default is 1 homepage URL; each URL is tested once for mobile and once for desktop.",
+    )
     parser.add_argument("--api-key", help=f"PageSpeed API key. Overrides {SKILL_ENV_PATH}.")
     parser.add_argument(
         "--provider",

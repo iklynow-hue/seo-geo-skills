@@ -19,7 +19,7 @@ SKILL_DIR = SCRIPT_DIR.parent
 RUNS_DIR = SKILL_DIR / "runs"
 CRAWL_SCRIPT = SCRIPT_DIR / "crawl_sample.py"
 PAGESPEED_SCRIPT = SCRIPT_DIR / "pagespeed_batch.py"
-DEFAULT_MAX_PAGESPEED_URLS = 5
+DEFAULT_MAX_PAGESPEED_URLS = 1
 MAX_CRAWL_PAGES = 50
 MODE_DEFAULTS = {
     "fast": 1,
@@ -789,7 +789,7 @@ def main() -> int:
         "--max-pagespeed-urls",
         type=int,
         default=DEFAULT_MAX_PAGESPEED_URLS,
-        help="Maximum representative URLs to test with PageSpeed.",
+        help="Maximum URLs to test with PageSpeed. Default is 1 homepage URL; raise this only when you need extra template coverage.",
     )
     parser.add_argument(
         "--html-report",
