@@ -28,9 +28,23 @@ It intentionally combines the strongest parts of classic technical SEO audits wi
 The skill keeps two evidence tracks for HTML pages:
 
 - **Search-engine baseline:** raw HTTP fetch with a Googlebot Smartphone-style user agent, no JavaScript, robots-aware, and only normal `<a href>` links counted as directly crawlable.
-- **Rendered browser evidence:** JS-rendered HTML from browser fetchers, used to inspect SPA content that humans can see after hydration.
+- **Googlebot rendered simulation:** JS-rendered DOM from browser fetchers, used to inspect what Google may see after the rendering queue executes JavaScript.
 
-If rendered evidence shows content or routes that the search-engine baseline cannot see, treat that as a crawlability/indexability issue, not as a clean pass.
+If rendered evidence shows content or routes that the search-engine baseline cannot see, do **not** say "Google cannot see it" without qualification. Say "raw baseline cannot see it; rendered simulation can/cannot recover it." Treat rendered-only signals as a JavaScript dependency risk rather than an automatic hard failure. If both raw and rendered evidence are missing, treat it as a hard indexing/extractability problem.
+
+For every page, the crawler now records:
+
+- `raw_title`, `raw_meta_description`, `raw_canonical`, `raw_h1_count`, `raw_json_ld_types`
+- `rendered_title`, `rendered_meta_description`, `rendered_canonical`, `rendered_h1_count`, `rendered_json_ld_types`
+- `rendered_signal_delta`, comparing raw vs rendered status for title, description, canonical, H1, body words, internal links, and JSON-LD
+- `googlebot_rendering`, with `raw_baseline`, `rendered_dom`, and the comparison delta
+
+Report wording should distinguish:
+
+- `missing_*` — missing after both raw and rendered inspection
+- `*_requires_js_rendering` — absent in raw HTML but present after rendering
+- `content_requires_js_rendering` — meaningful content is rendered-only
+- `navigation_requires_js_rendering` — crawlable links are rendered-only or inferred from route hints
 
 Rendered fetching uses this priority chain:
 
@@ -43,7 +57,7 @@ Scrapling (StealthyFetcher/Camoufox, JS-rendered) — primary
 
 **Why:** SPA sites (e.g., React, Angular, Vue) often serve a thin JS shell in initial HTML. Raw HTTP requests may see no meaningful content or crawlable links. JS rendering helps inspect the site, but the report must still say when content depends on rendering or assisted discovery.
 
-**Scrapling** (Camoufox mode) is always the primary fetcher — it provides full JS rendering, waits for `networkIdle`, and is the most reliable for content extraction. Timeout is 35s (increased from 20s) for heavy SPAs.
+**Scrapling** (Camoufox mode) is always the primary fetcher — it provides full JS rendering, waits for `networkIdle`, keeps resources enabled for SPA hydration, and waits an additional 8s before extraction. This is slower than blocking resources, but it is more accurate for route-level head tags such as JS-injected title, description, canonical, and trading/product metadata. Timeout is 60s for heavy SPAs.
 
 **Lightpanda** is preferred as secondary because it's significantly faster than full Playwright.
 
@@ -338,7 +352,8 @@ Inspect:
 - schema coverage
 - breadcrumb, author, FAQ, contact, and trust hints
 - whether meaningful body content is visible in initial HTML
-- search-engine baseline vs rendered-browser deltas
+- search-engine baseline vs Googlebot rendered simulation deltas
+- `summary.raw_coverage_rates`, `summary.rendered_coverage_rates`, `summary.rendered_only_signal_counts`, and `summary.missing_after_rendering_signal_counts`
 - pages discovered only through rendered links, DOM route hints, or route guesses
 - mobile / desktop PageSpeed averages and outliers when available
 
@@ -495,7 +510,8 @@ Include everything in Operator mode plus:
 - titles and meta descriptions
 - one clear H1
 - meaningful raw HTML content visible to Googlebot baseline
-- rendered content that materially exceeds raw HTML should be flagged as JS-dependent
+- rendered content that materially exceeds raw HTML should be flagged as JS-dependent, but not described as invisible to Google unless rendered evidence is also missing
+- raw-vs-rendered deltas for title, description, canonical, H1, body copy, links, and schema
 - duplicate metadata patterns
 - hreflang or locale consistency when relevant
 
@@ -526,6 +542,7 @@ Include everything in Operator mode plus:
 - structured, extractable prose
 - raw HTML visibility of core facts
 - clear warning when AI-readable facts only appear after JavaScript rendering
+- clear separation between Google rendering support and AI crawler/GEO extractability, because many AI crawlers and retrieval systems still prefer or require non-JS HTML
 - `llms.txt` presence if available
 - clean entity naming and context windows for retrieval
 

@@ -261,6 +261,8 @@ def build_final_report_seed(
     page_count = int(crawl.get("page_count", 0) or 0)
     pages_requiring_js_content = int(summary.get("pages_requiring_js_content", 0) or 0)
     pages_requiring_js_navigation = int(summary.get("pages_requiring_js_navigation", 0) or 0)
+    pages_with_rendered_recovered_signals = int(summary.get("pages_with_rendered_recovered_signals", 0) or 0)
+    pages_missing_signals_after_rendering = int(summary.get("pages_missing_signals_after_rendering", 0) or 0)
     pages_assisted_discovery = int(summary.get("pages_assisted_discovery", 0) or 0)
     pagespeed_provider = pagespeed.get("provider")
     pagespeed_errors = pagespeed.get("errors", [])
@@ -298,6 +300,12 @@ def build_final_report_seed(
                 f"{pages_requiring_js_navigation} 个页面导航依赖 JS 渲染，"
                 f"{pages_assisted_discovery} 个页面来自辅助发现。"
             )
+        if pages_with_rendered_recovered_signals or pages_missing_signals_after_rendering:
+            method_notes.append(
+                "Googlebot 渲染模拟提示："
+                f"{pages_with_rendered_recovered_signals} 个页面在渲染后补回了至少一个 raw 缺失信号，"
+                f"{pages_missing_signals_after_rendering} 个页面渲染后仍有信号缺失。"
+            )
     else:
         title = "SEO + GEO Audit Report"
         snapshot = [
@@ -330,6 +338,12 @@ def build_final_report_seed(
                 f"{pages_requiring_js_content} page(s) depend on JS-rendered content, "
                 f"{pages_requiring_js_navigation} page(s) depend on JS-rendered navigation, "
                 f"and {pages_assisted_discovery} page(s) came from assisted discovery."
+            )
+        if pages_with_rendered_recovered_signals or pages_missing_signals_after_rendering:
+            method_notes.append(
+                "Googlebot rendering simulation note: "
+                f"{pages_with_rendered_recovered_signals} page(s) recovered at least one raw-missing signal after rendering, "
+                f"and {pages_missing_signals_after_rendering} page(s) still had missing signals after rendering."
             )
 
     section_titles = [
@@ -502,6 +516,11 @@ def build_html_report(
     pagespeed_aggregate = (pagespeed or {}).get("aggregate", {})
     pagespeed_errors = (pagespeed or {}).get("errors", [])
     tested_urls = (pagespeed or {}).get("tested_urls", [])
+    rendering_title = "Raw 与渲染后覆盖率" if pack["html_lang"].startswith("zh") else "Raw vs Rendered Coverage"
+    raw_coverage_title = "Raw baseline" if not pack["html_lang"].startswith("zh") else "Raw 基线"
+    rendered_coverage_title = "Rendered DOM" if not pack["html_lang"].startswith("zh") else "渲染后 DOM"
+    rendered_only_title = "Rendered-only signals" if not pack["html_lang"].startswith("zh") else "仅渲染后出现的信号"
+    missing_after_render_title = "Missing after rendering" if not pack["html_lang"].startswith("zh") else "渲染后仍缺失的信号"
 
     page_rows = []
     for page in top_pages:
@@ -645,6 +664,17 @@ def build_html_report(
       <article class="panel">
         <h2>{html.escape(pack['coverage_rates'])}</h2>
         {fmt_dict_table(summary.get('coverage_rates', {}), pack['signal'], pack['coverage_percent'], pack['no_data'])}
+      </article>
+      <article class="panel">
+        <h2>{html.escape(rendering_title)}</h2>
+        <h3>{html.escape(raw_coverage_title)}</h3>
+        {fmt_dict_table(summary.get('raw_coverage_rates', {}), pack['signal'], pack['coverage_percent'], pack['no_data'])}
+        <h3>{html.escape(rendered_coverage_title)}</h3>
+        {fmt_dict_table(summary.get('rendered_coverage_rates', {}), pack['signal'], pack['coverage_percent'], pack['no_data'])}
+        <h3>{html.escape(rendered_only_title)}</h3>
+        {fmt_dict_table(summary.get('rendered_only_signal_counts', {}), pack['signal'], pack['pages'], pack['no_data'])}
+        <h3>{html.escape(missing_after_render_title)}</h3>
+        {fmt_dict_table(summary.get('missing_after_rendering_signal_counts', {}), pack['signal'], pack['pages'], pack['no_data'])}
       </article>
       <article class="panel">
         <h2>{html.escape(pack['template_mix'])}</h2>

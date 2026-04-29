@@ -19,15 +19,14 @@ from pathlib import Path
 
 # Import unified fetcher
 from fetchers import (
-    DEFAULT_UA as FETCHERS_UA,
     SEARCH_ENGINE_UA,
     detect_spa_shell,
     fetch_raw_http,
     fetch_with_spa_recovery,
 )
 
-DEFAULT_UA = FETCHERS_UA
 DEFAULT_SEARCH_UA = SEARCH_ENGINE_UA
+DEFAULT_UA = DEFAULT_SEARCH_UA
 TIMEOUT = 30
 MAX_SITEMAPS = 20
 MAX_BODY_CHARS = 250000
@@ -476,6 +475,127 @@ def dom_hint_links(response: dict, base_url: str, start_url: str) -> dict[str, l
     return normalized
 
 
+def signal_status(raw_present: bool, rendered_present: bool) -> str:
+    if raw_present and rendered_present:
+        return "raw_and_rendered"
+    if raw_present:
+        return "raw_only"
+    if rendered_present:
+        return "rendered_only"
+    return "missing"
+
+
+def build_rendered_signal_delta(
+    *,
+    raw_title: str,
+    rendered_title: str,
+    raw_meta_description: str,
+    rendered_meta_description: str,
+    raw_canonical: str,
+    rendered_canonical: str,
+    raw_h1_count: int,
+    rendered_h1_count: int,
+    raw_word_count: int,
+    rendered_word_count: int,
+    raw_internal_links: int,
+    rendered_internal_links: int,
+    dom_route_hint_links: int,
+    raw_json_ld_types: list[str],
+    rendered_json_ld_types: list[str],
+) -> dict:
+    """Compare raw Googlebot baseline signals against rendered DOM signals."""
+    signals = {
+        "title": {
+            "raw_present": bool(raw_title),
+            "rendered_present": bool(rendered_title),
+            "status": signal_status(bool(raw_title), bool(rendered_title)),
+            "raw_value": raw_title[:160],
+            "rendered_value": rendered_title[:160],
+        },
+        "meta_description": {
+            "raw_present": bool(raw_meta_description),
+            "rendered_present": bool(rendered_meta_description),
+            "status": signal_status(bool(raw_meta_description), bool(rendered_meta_description)),
+            "raw_value": raw_meta_description[:220],
+            "rendered_value": rendered_meta_description[:220],
+        },
+        "canonical": {
+            "raw_present": bool(raw_canonical),
+            "rendered_present": bool(rendered_canonical),
+            "status": signal_status(bool(raw_canonical), bool(rendered_canonical)),
+            "raw_value": raw_canonical[:240],
+            "rendered_value": rendered_canonical[:240],
+        },
+        "h1": {
+            "raw_present": raw_h1_count > 0,
+            "rendered_present": rendered_h1_count > 0,
+            "status": signal_status(raw_h1_count > 0, rendered_h1_count > 0),
+            "raw_count": raw_h1_count,
+            "rendered_count": rendered_h1_count,
+        },
+        "body_words": {
+            "raw_present": raw_word_count >= 50,
+            "rendered_present": rendered_word_count >= 50,
+            "status": signal_status(raw_word_count >= 50, rendered_word_count >= 50),
+            "raw_count": raw_word_count,
+            "rendered_count": rendered_word_count,
+        },
+        "internal_links": {
+            "raw_present": raw_internal_links > 0,
+            "rendered_present": rendered_internal_links > 0,
+            "status": signal_status(raw_internal_links > 0, rendered_internal_links > 0),
+            "raw_count": raw_internal_links,
+            "rendered_count": rendered_internal_links,
+            "dom_route_hint_count": dom_route_hint_links,
+        },
+        "json_ld": {
+            "raw_present": bool(raw_json_ld_types),
+            "rendered_present": bool(rendered_json_ld_types),
+            "status": signal_status(bool(raw_json_ld_types), bool(rendered_json_ld_types)),
+            "raw_types": raw_json_ld_types,
+            "rendered_types": rendered_json_ld_types,
+        },
+    }
+    rendered_only = [name for name, signal in signals.items() if signal["status"] == "rendered_only"]
+    missing = [name for name, signal in signals.items() if signal["status"] == "missing"]
+    raw_and_rendered = [name for name, signal in signals.items() if signal["status"] == "raw_and_rendered"]
+    if rendered_only and not missing:
+        conclusion = "rendering_recovers_all_missing_primary_signals"
+    elif rendered_only:
+        conclusion = "rendering_recovers_some_signals"
+    elif missing:
+        conclusion = "signals_missing_after_rendering"
+    else:
+        conclusion = "raw_baseline_contains_primary_signals"
+    return {
+        "signals": signals,
+        "rendered_only_signals": rendered_only,
+        "missing_after_rendering": missing,
+        "raw_and_rendered_signals": raw_and_rendered,
+        "conclusion": conclusion,
+    }
+
+
+def empty_rendered_signal_delta() -> dict:
+    return build_rendered_signal_delta(
+        raw_title="",
+        rendered_title="",
+        raw_meta_description="",
+        rendered_meta_description="",
+        raw_canonical="",
+        rendered_canonical="",
+        raw_h1_count=0,
+        rendered_h1_count=0,
+        raw_word_count=0,
+        rendered_word_count=0,
+        raw_internal_links=0,
+        rendered_internal_links=0,
+        dom_route_hint_links=0,
+        raw_json_ld_types=[],
+        rendered_json_ld_types=[],
+    )
+
+
 def fetch(url: str, user_agent: str, timeout: int = TIMEOUT, preferred_fetcher: str = "auto") -> dict:
     """Fetch a URL using the unified fetcher (JS rendering when available).
 
@@ -816,6 +936,15 @@ def analyze_page(
     )
     rendered_only_links = [link for link in rendered_a_links if link not in raw_a_links]
 
+    raw_title = raw["title"]
+    rendered_title = rendered["title"]
+    raw_meta_description = raw_parser.meta.get("description", "").strip()
+    rendered_meta_description = rendered_parser.meta.get("description", "").strip()
+    raw_canonical = raw["canonical"]
+    rendered_canonical = rendered["canonical"]
+    raw_h1_count = raw_parser.heading_counts["h1"]
+    rendered_h1_count = rendered_parser.heading_counts["h1"]
+
     raw_meta_robots = raw_parser.meta.get("robots", "").strip()
     rendered_meta_robots = rendered_parser.meta.get("robots", "").strip()
     x_robots = raw["headers"].get("x-robots-tag", "").strip()
@@ -848,22 +977,48 @@ def analyze_page(
 
     final_url = (raw_response or response).get("final_url", response.get("final_url", url))
     template = classify_url(final_url, start_url)
-    title = raw["title"] or rendered["title"]
-    meta_description = raw_parser.meta.get("description", "") or rendered_parser.meta.get("description", "")
-    canonical = raw["canonical"] or rendered["canonical"]
+    title = raw_title or rendered_title
+    meta_description = raw_meta_description or rendered_meta_description
+    canonical = raw_canonical or rendered_canonical
     json_ld_types = raw["json_ld_types"] or rendered["json_ld_types"]
-    h1_count = raw_parser.heading_counts["h1"]
-    heading_counts = dict(raw_parser.heading_counts or rendered_parser.heading_counts)
+    h1_count = raw_h1_count or rendered_h1_count
+    heading_counts = dict(raw_parser.heading_counts if raw_h1_count else rendered_parser.heading_counts)
+
+    rendered_signal_delta = build_rendered_signal_delta(
+        raw_title=raw_title,
+        rendered_title=rendered_title,
+        raw_meta_description=raw_meta_description,
+        rendered_meta_description=rendered_meta_description,
+        raw_canonical=raw_canonical,
+        rendered_canonical=rendered_canonical,
+        raw_h1_count=raw_h1_count,
+        rendered_h1_count=rendered_h1_count,
+        raw_word_count=raw["word_count"],
+        rendered_word_count=rendered["word_count"],
+        raw_internal_links=len(raw_a_links),
+        rendered_internal_links=len(rendered_a_links),
+        dom_route_hint_links=len(dom_route_hint_links),
+        raw_json_ld_types=raw["json_ld_types"],
+        rendered_json_ld_types=rendered["json_ld_types"],
+    )
 
     issues = []
     if not title:
         issues.append("missing_title")
+    elif not raw_title and rendered_title:
+        issues.append("title_requires_js_rendering")
     if not meta_description:
         issues.append("missing_meta_description")
+    elif not raw_meta_description and rendered_meta_description:
+        issues.append("meta_description_requires_js_rendering")
     if not canonical:
         issues.append("missing_canonical")
+    elif not raw_canonical and rendered_canonical:
+        issues.append("canonical_requires_js_rendering")
     if h1_count == 0:
         issues.append("missing_h1")
+    elif raw_h1_count == 0 and rendered_h1_count > 0:
+        issues.append("h1_requires_js_rendering")
     if h1_count > 1:
         issues.append("multiple_h1")
     if rendered_parser.image_count and rendered_parser.images_missing_alt:
@@ -894,10 +1049,14 @@ def analyze_page(
         "template": template,
         "discovery_source": discovery_source,
         "title": title,
-        "rendered_title": rendered["title"],
+        "raw_title": raw_title,
+        "rendered_title": rendered_title,
         "meta_description": meta_description,
+        "raw_meta_description": raw_meta_description,
+        "rendered_meta_description": rendered_meta_description,
         "canonical": canonical,
-        "rendered_canonical": rendered["canonical"],
+        "raw_canonical": raw_canonical,
+        "rendered_canonical": rendered_canonical,
         "meta_robots": robots_value,
         "lang": raw_parser.lang or rendered_parser.lang,
         "word_count": raw["word_count"],
@@ -905,7 +1064,8 @@ def analyze_page(
         "html_bytes": (raw_response or response).get("bytes", 0),
         "rendered_html_bytes": response.get("bytes", 0),
         "h1_count": h1_count,
-        "rendered_h1_count": rendered_parser.heading_counts["h1"],
+        "raw_h1_count": raw_h1_count,
+        "rendered_h1_count": rendered_h1_count,
         "heading_counts": heading_counts,
         "rendered_heading_counts": dict(rendered_parser.heading_counts),
         "internal_links": len(raw_a_links),
@@ -919,6 +1079,7 @@ def analyze_page(
         "image_count": rendered_parser.image_count,
         "images_missing_alt": rendered_parser.images_missing_alt,
         "json_ld_types": json_ld_types,
+        "raw_json_ld_types": raw["json_ld_types"],
         "rendered_json_ld_types": rendered["json_ld_types"],
         "og_coverage": og_coverage,
         "twitter_coverage": twitter_coverage,
@@ -935,11 +1096,20 @@ def analyze_page(
         },
         "search_engine_visibility": {
             "baseline_user_agent": "Googlebot Smartphone",
+            "rendered_simulation": "headless browser fetch with JavaScript when available",
             "raw_fetch_error": raw_error,
             "raw_status": raw_response.get("status") if raw_response else None,
             "allowed_by_robots": bool(robots_access.get("allowed", True)),
             "robots_matched_agent": robots_access.get("matched_agent"),
             "robots_matched_rule": robots_access.get("matched_rule"),
+            "raw_title_present": bool(raw_title),
+            "rendered_title_present": bool(rendered_title),
+            "raw_meta_description_present": bool(raw_meta_description),
+            "rendered_meta_description_present": bool(rendered_meta_description),
+            "raw_canonical_present": bool(raw_canonical),
+            "rendered_canonical_present": bool(rendered_canonical),
+            "raw_h1_count": raw_h1_count,
+            "rendered_h1_count": rendered_h1_count,
             "raw_word_count": raw["word_count"],
             "rendered_word_count": rendered["word_count"],
             "content_requires_js_rendering": rendered_visible and not raw_initial_html_visible,
@@ -948,6 +1118,32 @@ def analyze_page(
             "rendered_only_internal_a_links": len(rendered_only_links),
             "dom_route_hint_links": len(dom_route_hint_links),
             "navigation_requires_js_rendering": not raw_a_links and bool(rendered_a_links or dom_route_hint_links),
+        },
+        "rendered_signal_delta": rendered_signal_delta,
+        "googlebot_rendering": {
+            "raw_baseline": {
+                "user_agent": "Googlebot Smartphone",
+                "status": raw_response.get("status") if raw_response else None,
+                "title": raw_title,
+                "meta_description": raw_meta_description,
+                "canonical": raw_canonical,
+                "h1_count": raw_h1_count,
+                "word_count": raw["word_count"],
+                "internal_links": len(raw_a_links),
+                "json_ld_types": raw["json_ld_types"],
+            },
+            "rendered_dom": {
+                "fetcher": response.get("fetcher", "urllib"),
+                "status": response.get("status"),
+                "title": rendered_title,
+                "meta_description": rendered_meta_description,
+                "canonical": rendered_canonical,
+                "h1_count": rendered_h1_count,
+                "word_count": rendered["word_count"],
+                "internal_links": len(rendered_a_links),
+                "json_ld_types": rendered["json_ld_types"],
+            },
+            "delta": rendered_signal_delta,
         },
         "spa_detection": spa_detection,
         "fetcher": response.get("fetcher", "urllib"),
@@ -1001,10 +1197,21 @@ def aggregate(pages: list[dict]) -> dict:
     pages_flagged_spa = sum(1 for p in pages if p.get("spa_detection", {}).get("needs_js_rendering", False))
     pages_requiring_js_content = sum(1 for p in pages if p.get("search_engine_visibility", {}).get("content_requires_js_rendering"))
     pages_requiring_js_navigation = sum(1 for p in pages if p.get("search_engine_visibility", {}).get("navigation_requires_js_rendering"))
+    pages_with_rendered_recovered_signals = sum(
+        1 for p in pages if p.get("rendered_signal_delta", {}).get("rendered_only_signals")
+    )
+    pages_missing_signals_after_rendering = sum(
+        1 for p in pages if p.get("rendered_signal_delta", {}).get("missing_after_rendering")
+    )
     pages_allowed_by_robots = sum(1 for p in pages if p.get("search_engine_visibility", {}).get("allowed_by_robots", True))
     pages_assisted_discovery = sum(1 for p in pages if p.get("discovery_source") in {"route_guess", "dom_route_hint"})
     fetcher_counts = Counter(p.get("fetcher", "unknown") for p in pages)
     discovery_source_counts = Counter(p.get("discovery_source", "unknown") for p in pages)
+    rendered_only_signal_counts = Counter()
+    missing_after_rendering_counts = Counter()
+    for page in pages:
+        rendered_only_signal_counts.update(page.get("rendered_signal_delta", {}).get("rendered_only_signals", []))
+        missing_after_rendering_counts.update(page.get("rendered_signal_delta", {}).get("missing_after_rendering", []))
     return {
         "page_count": len(pages),
         "template_counts": dict(template_counts),
@@ -1022,6 +1229,10 @@ def aggregate(pages: list[dict]) -> dict:
         "pages_flagged_spa": pages_flagged_spa,
         "pages_requiring_js_content": pages_requiring_js_content,
         "pages_requiring_js_navigation": pages_requiring_js_navigation,
+        "pages_with_rendered_recovered_signals": pages_with_rendered_recovered_signals,
+        "pages_missing_signals_after_rendering": pages_missing_signals_after_rendering,
+        "rendered_only_signal_counts": dict(rendered_only_signal_counts),
+        "missing_after_rendering_signal_counts": dict(missing_after_rendering_counts),
         "pages_allowed_by_robots": pages_allowed_by_robots,
         "pages_assisted_discovery": pages_assisted_discovery,
         "fetcher_counts": dict(fetcher_counts),
@@ -1039,6 +1250,30 @@ def aggregate(pages: list[dict]) -> dict:
             "robots_allowed_googlebot": round(100 * pages_allowed_by_robots / totals, 1),
             "content_not_js_dependent": round(100 * (totals - pages_requiring_js_content) / totals, 1),
             "navigation_not_js_dependent": round(100 * (totals - pages_requiring_js_navigation) / totals, 1),
+        },
+        "raw_coverage_rates": {
+            "title": round(100 * sum(1 for p in pages if p.get("raw_title")) / totals, 1),
+            "meta_description": round(100 * sum(1 for p in pages if p.get("raw_meta_description")) / totals, 1),
+            "canonical": round(100 * sum(1 for p in pages if p.get("raw_canonical")) / totals, 1),
+            "single_h1": round(100 * sum(1 for p in pages if p.get("raw_h1_count") == 1) / totals, 1),
+            "schema": round(100 * sum(1 for p in pages if p.get("raw_json_ld_types")) / totals, 1),
+            "internal_links": round(100 * sum(1 for p in pages if p.get("internal_links", 0) > 0) / totals, 1),
+            "body_words_50_plus": round(100 * sum(1 for p in pages if p.get("word_count", 0) >= 50) / totals, 1),
+        },
+        "rendered_coverage_rates": {
+            "title": round(100 * sum(1 for p in pages if p.get("rendered_title")) / totals, 1),
+            "meta_description": round(100 * sum(1 for p in pages if p.get("rendered_meta_description")) / totals, 1),
+            "canonical": round(100 * sum(1 for p in pages if p.get("rendered_canonical")) / totals, 1),
+            "single_h1": round(100 * sum(1 for p in pages if p.get("rendered_h1_count") == 1) / totals, 1),
+            "schema": round(100 * sum(1 for p in pages if p.get("rendered_json_ld_types")) / totals, 1),
+            "internal_links": round(100 * sum(1 for p in pages if p.get("rendered_internal_links", 0) > 0) / totals, 1),
+            "body_words_50_plus": round(100 * sum(1 for p in pages if p.get("rendered_word_count", 0) >= 50) / totals, 1),
+        },
+        "googlebot_rendering_summary": {
+            "pages_with_any_rendered_only_signal": pages_with_rendered_recovered_signals,
+            "pages_with_any_signal_missing_after_rendering": pages_missing_signals_after_rendering,
+            "rendered_only_signal_counts": dict(rendered_only_signal_counts),
+            "missing_after_rendering_signal_counts": dict(missing_after_rendering_counts),
         },
     }
 

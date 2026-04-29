@@ -46,6 +46,27 @@
 | Performance & Page Experience |  | 10% |  |  |
 | **Weighted overall** |  | **100%** |  |  |
 
+## Raw vs Rendered Googlebot Evidence
+
+Use this section when the site uses JavaScript rendering or when raw and rendered evidence differ.
+
+| Signal | Raw Googlebot baseline | Rendered DOM simulation | Conclusion |
+|---|---:|---:|---|
+| Title |  |  |  |
+| Meta description |  |  |  |
+| Canonical |  |  |  |
+| H1 |  |  |  |
+| Body words |  |  |  |
+| Internal links |  |  |  |
+| JSON-LD |  |  |  |
+
+Interpretation rules:
+
+- If raw is missing and rendered is present, call it a JS dependency risk.
+- If both raw and rendered are missing, call it a true missing-signal issue.
+- If rendered links are present but raw links are absent, mark them as rendered-discoverable, not raw-crawlable.
+- If only DOM route hints or route guesses expose a page, do not present that route as search-discoverable.
+
 ## Section Findings
 
 ### 1. Technical SEO & Indexability — [score]

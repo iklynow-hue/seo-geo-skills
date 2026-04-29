@@ -44,7 +44,7 @@ SEARCH_ENGINE_UA = (
 )
 MAX_BODY_CHARS = 250_000
 FETCH_TIMEOUT = 30
-SCRAPLING_NETWORK_IDLE_TIMEOUT = 35_000  # ms — heavier SPAs need more time
+SCRAPLING_NETWORK_IDLE_TIMEOUT = 60_000  # ms — heavier SPAs need full hydration time
 
 # Lightpanda nightly download URLs
 LIGHTPANDA_URLS = {
@@ -488,7 +488,11 @@ def fetch_raw_http(url: str, user_agent: str = SEARCH_ENGINE_UA, timeout: int = 
     return result
 
 
-def _fetch_scrapling(url: str, timeout: int = FETCH_TIMEOUT) -> dict | None:
+def _fetch_scrapling(
+    url: str,
+    timeout: int = FETCH_TIMEOUT,
+    user_agent: str = SEARCH_ENGINE_UA,
+) -> dict | None:
     """Fetch with Scrapling StealthyFetcher (Camoufox) — full JS rendering."""
     try:
         from scrapling.fetchers import StealthyFetcher
@@ -500,7 +504,13 @@ def _fetch_scrapling(url: str, timeout: int = FETCH_TIMEOUT) -> dict | None:
             url,
             headless=True,
             network_idle=True,
-            disable_resources=True,
+            # Do not disable resources here: router-heavy SPAs often inject
+            # title, meta, canonical, and route links only after their full
+            # client bundle and API calls hydrate.
+            disable_resources=False,
+            wait=8000,
+            timeout=max(timeout * 1000, SCRAPLING_NETWORK_IDLE_TIMEOUT),
+            extra_headers={"User-Agent": user_agent},
         )
         html_text = page.html if hasattr(page, "html") else str(page)
         if not html_text:
@@ -686,7 +696,7 @@ def fetch_with_spa_recovery(
     # Recovery strategy 1: try Scrapling with longer timeout if not already used
     if result.get("fetcher") != "scrapling":
         try:
-            scrapling_result = _fetch_scrapling(url, timeout=FETCH_TIMEOUT + 10)
+            scrapling_result = _fetch_scrapling(url, timeout=FETCH_TIMEOUT + 10, user_agent=user_agent)
             if scrapling_result:
                 s_words = _count_words_quick(scrapling_result.get("text", ""))
                 s_scripts = _count_scripts_quick(scrapling_result.get("text", ""))
@@ -773,7 +783,7 @@ def fetch_rendered(
         Dict with keys: final_url, status, headers, content_type, text, bytes, fetcher
     """
     fetcher_map = {
-        "scrapling": lambda: _fetch_scrapling(url, timeout),
+        "scrapling": lambda: _fetch_scrapling(url, timeout, user_agent=user_agent),
         "lightpanda": lambda: _fetch_lightpanda(url, timeout),
         "agent_browser": lambda: _fetch_agent_browser(url, timeout),
         "chrome": lambda: _fetch_agent_browser(url, timeout, auto_connect=True),

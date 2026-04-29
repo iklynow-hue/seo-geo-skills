@@ -49,6 +49,7 @@ Reward:
 - core content appears in raw Googlebot-visible HTML
 - rendered-browser content does not materially exceed the search-engine baseline
 - duplicate metadata is limited
+- raw and rendered signal coverage agree, or rendered-only signals are clearly non-critical
 
 Penalize heavily:
 
@@ -60,6 +61,13 @@ Penalize heavily:
 - sampled pages are found only through DOM route hints or route guesses
 - heavy duplicate title / meta clusters
 - many important pages marked noindex accidentally
+
+Raw vs rendered scoring guidance:
+
+- If raw HTML is missing a signal but rendered DOM recovers it, score it as a JavaScript dependency risk, not as a full missing-signal failure.
+- If raw HTML and rendered DOM both miss a signal, score it as a true missing-signal issue.
+- If raw internal links are absent but rendered `<a href>` links exist, penalize discovery robustness; if only DOM route hints exist, penalize more heavily.
+- For Google SEO, rendered-only title/description/H1/schema can be P1/P2 depending on page importance and performance. For GEO/AI visibility, keep the penalty higher because many AI crawlers do not reliably render JavaScript.
 
 ### 2. On-Page SEO & Content Packaging (15)
 
@@ -115,6 +123,12 @@ Penalize:
 - overly vague marketing copy
 - missing structured answer blocks
 - poor extractability of product, policy, or factual content
+
+Raw vs rendered scoring guidance:
+
+- Give partial credit when rendered DOM contains answer-first content, facts, links, and schema.
+- Do not give full GEO credit when key facts only appear after JavaScript rendering; raw HTML, `llms.txt`, feeds, docs, and structured data are stronger retrieval surfaces.
+- If `llms.txt` is strong but page HTML is raw-empty, treat `llms.txt` as a win and the page as a remaining extraction risk.
 
 ### 5. EEAT & Trust Signals (15)
 
