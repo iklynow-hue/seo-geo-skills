@@ -1,0 +1,11 @@
+{
+  "name": "seo-geo-site-audit-lighthouse",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Local Lighthouse runner used by pagespeed_batch.py for the seo-geo-site-audit skill.",
+  "dependencies": {
+    "chrome-launcher": "^1.1.2",
+    "lighthouse": "^12.2.0"
+  }
+}

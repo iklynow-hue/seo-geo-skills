@@ -1,82 +1,101 @@
 # SEO GEO Skills
 
-Public skill repo for:
-
-- `skills/seo-geo-site-audit/`
-
-This skill works with both Codex and Claude Code for sampled SEO + GEO audits of public sites, with:
+Claude Code skill for sampled SEO + GEO audits of public sites.
 
 - capped crawling up to 50 pages
 - template-aware sampling
 - raw Googlebot-style baseline compared with rendered browser evidence
-- local Lighthouse by default
-- PageSpeed API support through a skill-local `.env`
+- local Lighthouse via a programmatic node runner (`lighthouse` + `chrome-launcher`)
 - final polished HTML reporting from the same structured content as the written audit
 
-## Install
+## Install in one paste
 
-Clone the repo:
+In a Claude Code session, paste this:
 
-```bash
-git clone https://github.com/iklynow-hue/seo-geo-skills
-cd seo-geo-skills
+```text
+Install this skill: https://github.com/iklynow-hue/seo-geo-skills
 ```
 
-Link the skill into your local skills folder:
+Claude will read this README and run the install for you. After it finishes, **start a new Claude Code session** so the skill is picked up, then say:
 
-```bash
-mkdir -p ~/.agents/skills
-ln -s "$PWD/skills/seo-geo-site-audit" ~/.agents/skills/seo-geo-site-audit
+```text
+Conduct a SEO and GEO audit for https://example.com
 ```
 
-For Claude Code, the skill also includes a local [CLAUDE.md](skills/seo-geo-site-audit/CLAUDE.md) entry file.
+Claude will autodiscover the `seo-geo-site-audit` skill, walk through the setup questions, and run the audit.
 
-If you want to use PageSpeed API mode, create a local env file inside the skill directory:
+## What Claude should run to install
 
-```bash
-cp skills/seo-geo-site-audit/.env.example skills/seo-geo-site-audit/.env
-```
+If you (or Claude) are running the install manually, this is the exact recipe.
 
-Then edit `skills/seo-geo-site-audit/.env` and set:
+**Prerequisites:** `git`, `python3`, `node` + `npm`. Chrome will be downloaded by `chrome-launcher` on first Lighthouse run if not present.
 
 ```bash
-PAGESPEED_API_KEY=your_key_here
+# 1. Clone the repo to a stable location
+mkdir -p ~/.claude
+git clone https://github.com/iklynow-hue/seo-geo-skills ~/.claude/seo-geo-skills
+
+# 2. Symlink the skill into Claude Code's user skills folder
+mkdir -p ~/.claude/skills
+ln -s ~/.claude/seo-geo-skills/skills/seo-geo-site-audit ~/.claude/skills/seo-geo-site-audit
+
+# 3. Install the local Lighthouse runner's npm deps (one-time, ~120MB)
+cd ~/.claude/seo-geo-skills/skills/seo-geo-site-audit/scripts && npm install
 ```
+
+That's it. Open a new Claude Code session and the skill will autotrigger on any SEO/GEO audit request.
+
+### Optional: per-project install instead
+
+If you want the skill only available inside one project, symlink it under that project instead of `~/.claude/skills/`:
+
+```bash
+mkdir -p .claude/skills
+ln -s ~/.claude/seo-geo-skills/skills/seo-geo-site-audit .claude/skills/seo-geo-site-audit
+```
+
+### Optional fetcher prerequisites
+
+The crawl works with `urllib` alone, but it is more accurate on SPA sites when one or more of these are present. Skip them initially — the wrapper detects what is available at run time, and you can add `--auto-install-prereqs` later.
+
+- `scrapling[fetchers]` (`pip install "scrapling[fetchers]"` + `scrapling install`)
+- `lightpanda` (downloads to `~/.local/bin/lightpanda` on first auto-install)
+- `agent-browser` (`npm install -g agent-browser` + `agent-browser install`)
 
 ## Update
 
-If your local install is a symlink, updating is simple:
+The skill is a symlink, so updates are just:
 
 ```bash
-cd seo-geo-skills
-git pull
+cd ~/.claude/seo-geo-skills && git pull
 ```
 
-Because `~/.agents/skills/seo-geo-site-audit` points at this repo folder, the skill updates immediately after the pull.
+If `package.json` changed under `skills/seo-geo-site-audit/scripts/`, rerun `npm install` in that directory.
 
-If you copied the skill instead of symlinking it, replace the local folder with the newer `skills/seo-geo-site-audit` contents from this repo.
+## Use it
 
-## Quick Start
+After install, open a fresh Claude Code session and say things like:
 
-The simplest way to try it:
+- `Conduct a SEO and GEO audit for https://example.com`
+- `Audit this site for AI visibility: https://example.com`
+- `Run a 50-page SEO + GEO audit for https://example.com, generate the HTML report, output in Chinese`
 
-1. Clone this repo and link the skill folder.
-2. Open Codex or Claude Code.
-3. Paste:
+Claude will pick up the `seo-geo-site-audit` skill from `~/.claude/skills/` and walk through:
 
-```text
-Use $seo-geo-site-audit to audit https://example.com
-```
+1. Scope (1 / 10 / 50 / custom pages)
+2. Output style (Operator / Boss / Specialist)
+3. Performance evidence (run local Lighthouse or skip)
+4. HTML report on / off
+5. Final output language
 
-4. Answer the setup questions one by one.
-5. Let the wrapper run and review the generated artifacts.
+If you already know what you want, put it all in the first message and it skips the questionnaire.
 
 Current implementation limits to know up front:
 
 - crawl cap: `1` to `50` pages
 - audit presets: `fast=1`, `light=10`, `template=50`
 - default audit scope: `light=10`
-- PageSpeed / performance test URLs: default `1` homepage URL, maximum `10`
+- Lighthouse URLs: default `1` homepage URL, maximum `10`
 - best-effort SPA route expansion is capped and still sample-based, not a full app crawler
 - SPA route hints and guessed URLs are labeled as assisted discovery, not search-engine crawl proof
 
@@ -92,7 +111,7 @@ Use `seo-geo-site-audit` when you want:
 
 ## SPA And Search Crawlability
 
-The crawler now keeps two evidence tracks for each HTML page:
+The crawler keeps two evidence tracks for each HTML page:
 
 - `search_engine_visibility`: raw Googlebot-style HTTP baseline, no JavaScript.
 - rendered browser evidence: what the SPA shows after JavaScript runs.
@@ -111,46 +130,33 @@ The skill is designed to ask setup questions one by one before crawling:
 
 1. Scope
 2. Output style
-3. Performance evidence mode
+3. Performance evidence (run local Lighthouse or skip)
 4. HTML report on/off
 5. Final output language
 
 Language confirmation is mandatory for the skill flow. The audit should not proceed to the final report until the user confirms the language or explicitly accepts the default English.
 
-If you already know your preferences, you can put them in the first prompt and skip the questionnaire. If scope, output style, PageSpeed handling, HTML on/off, and final language are all clearly stated, the agent should use them directly instead of asking again.
+If you already know your preferences, you can put them in the first prompt and skip the questionnaire. If scope, output style, performance on/off, HTML on/off, and final language are all clearly stated, the agent should use them directly instead of asking again.
 
 Example:
 
 ```text
-Use $seo-geo-site-audit to audit https://example.com with light mode, Operator output, PageSpeed API from the skill .env, HTML report on, and final report in Chinese.
+Use $seo-geo-site-audit to audit https://example.com with light mode, Operator output, local Lighthouse on, HTML report on, and final report in Chinese.
 ```
-
-Kilo Code example:
-
-```bash
-kilo run --auto --dir ~/Projects/mcmarkets 'Use $seo-geo-site-audit to audit https://www.mcmarkets.com. 要求: light mode, operator 风格, PageSpeed 用 skill .env 里的 API key, 输出 HTML 报告, 最终报告用中文. 如果这些偏好已经明确就不要重复提问只补问缺失项.'
-```
-
-Use single quotes around the prompt in a shell so `$seo-geo-site-audit` is passed literally instead of being treated as a shell variable.
 
 Default first test:
 
-- choose `Local Lighthouse`
+- keep local Lighthouse on
 - keep the default output style
 - start with the default `10-page` light audit
 - turn HTML on if you want a shareable artifact
 
 Current performance choices:
 
-- `1. Local Lighthouse (default)`
-- `2. Skip PageSpeed`
-- `3. Use PageSpeed API from the skill .env`
+- `1. Run local Lighthouse (default)`
+- `2. Skip performance`
 
-Performance collection defaults to the landing page only. The wrapper tests one homepage URL with both mobile and desktop strategies, which keeps audits fast and avoids repeated API delays on heavy SPA routes. Use `--max-pagespeed-urls` only when you explicitly need extra template coverage.
-
-If you choose the API path, save the key in:
-
-- `skills/seo-geo-site-audit/.env`
+Performance collection defaults to the landing page only. The wrapper tests one homepage URL with both mobile and desktop strategies, which keeps audits fast and avoids long Lighthouse waits on heavy SPA routes. Use `--max-pagespeed-urls` only when you explicitly need extra template coverage.
 
 The final language choices are:
 
@@ -172,10 +178,10 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 
 ## Terminal Usage
 
-Use the wrapper for normal runs:
+Use the wrapper for normal runs (replace `${SKILL_DIR}` with your actual install path, e.g. `~/.claude/skills/seo-geo-site-audit`):
 
 ```bash
-~/.agents/skills/seo-geo-site-audit/scripts/audit-site \
+"${SKILL_DIR}/scripts/audit-site" \
   https://example.com \
   --output-style operator
 ```
@@ -183,7 +189,7 @@ Use the wrapper for normal runs:
 Example with HTML output in Chinese:
 
 ```bash
-~/.agents/skills/seo-geo-site-audit/scripts/audit-site \
+"${SKILL_DIR}/scripts/audit-site" \
   https://example.com \
   --mode template \
   --output-style operator \
@@ -194,9 +200,9 @@ Example with HTML output in Chinese:
 Then render the polished final HTML after you fill `final-report.json`:
 
 ```bash
-~/.agents/skills/seo-geo-site-audit/scripts/render-report-html \
-  --report-json ~/.agents/skills/seo-geo-site-audit/runs/site-audit-example.com-<stamp>/final-report.json \
-  --out ~/.agents/skills/seo-geo-site-audit/runs/site-audit-example.com-<stamp>/audit-report.html
+"${SKILL_DIR}/scripts/render-report-html" \
+  --report-json "${SKILL_DIR}/runs/site-audit-example.com-<stamp>/final-report.json" \
+  --out "${SKILL_DIR}/runs/site-audit-example.com-<stamp>/audit-report.html"
 ```
 
 Useful options:
@@ -205,12 +211,10 @@ Useful options:
 - `--max-pages 1-50`
 - `--output-style boss|operator|specialist`
 - `--max-pagespeed-urls 1-10` (default `1`; homepage only, tested once on mobile and once on desktop)
-- `--pagespeed-provider local|api|api_with_fallback`
 - `--skip-pagespeed`
 - `--html-report`
 - `--report-language english|chinese` for the wrapper's evidence HTML and seeded final report payload
 - `--fetcher auto|scrapling|lightpanda|agent_browser|chrome|urllib`
-- `--local-lighthouse-fallback` as a compatibility alias for `api_with_fallback`
 - `--auto-install-prereqs`
 - `--skip-prereq-check`
 - `--out-dir /path/to/output`
@@ -226,7 +230,7 @@ Artifacts:
 
 Final HTML flow in the skill:
 
-1. The wrapper gathers crawl and performance evidence.
+1. The wrapper gathers crawl and Lighthouse evidence.
 2. The wrapper writes `evidence-report.html` and seeds `final-report.json`.
 3. The agent writes the final audit in the selected language and fills `final-report.json`.
 4. The renderer turns that payload into the final `audit-report.html`.
@@ -235,12 +239,8 @@ Final HTML flow in the skill:
 
 This repo is intended to be safe for public cloning.
 
-- No API keys should ever be hardcoded in source, docs, or artifacts.
-- PageSpeed keys should only come from:
-  - `skills/seo-geo-site-audit/.env`
-  - `PAGESPEED_API_KEY`
-  - `GOOGLE_API_KEY`
-- The code should only persist `api_key_used: true/false`, never the key itself.
+- No API keys, tokens, or secrets should be hardcoded in source, docs, or artifacts.
+- The skill does not require any third-party API key for performance evidence; Lighthouse runs locally.
 
 See:
 
@@ -262,79 +262,100 @@ If you run into a bug or have a suggestion, feel free to open an issue.
 
 - `skills/seo-geo-site-audit/`
 
-这个技能同时适用于 Codex 和 Claude Code，用于对公开网站进行采样式 SEO + GEO 审核，支持：
+这是一个 Claude Code 技能，用于对公开网站进行采样式 SEO + GEO 审核，支持：
 
 - 最多 50 页的上限抓取
 - 按模板类型抽样
 - 对比 raw Googlebot 风格基线和浏览器渲染证据
-- 默认使用本地 Lighthouse
-- 通过技能目录下的 `.env` 接入 PageSpeed API
+- 通过 `lighthouse` + `chrome-launcher` 在本地编程式运行 Lighthouse
 - 基于与终端报告相同结构内容生成最终 HTML 报告
 
-## 安装
+## 一次粘贴完成安装
 
-克隆仓库：
+在 Claude Code 会话里直接粘贴：
 
-```bash
-git clone https://github.com/iklynow-hue/seo-geo-skills
-cd seo-geo-skills
+```text
+帮我安装这个 skill: https://github.com/iklynow-hue/seo-geo-skills
 ```
 
-将技能链接到本地 skills 目录：
+Claude 会读取本 README 并替你执行安装。完成后**重启一个 Claude Code 会话**让 skill 被加载，然后说：
 
-```bash
-mkdir -p ~/.agents/skills
-ln -s "$PWD/skills/seo-geo-site-audit" ~/.agents/skills/seo-geo-site-audit
+```text
+帮我对 https://example.com 做一次 SEO 和 GEO 审核
 ```
 
-对于 Claude Code，这个技能也包含了本地入口文件 [CLAUDE.md](skills/seo-geo-site-audit/CLAUDE.md)。
+Claude 会自动匹配 `seo-geo-site-audit` skill，按顺序问你配置，再开始审核。
 
-如果你要使用 PageSpeed API 模式，请先在技能目录中创建本地 env 文件：
+## 手动安装步骤（也是 Claude 会执行的）
 
-```bash
-cp skills/seo-geo-site-audit/.env.example skills/seo-geo-site-audit/.env
-```
-
-然后编辑 `skills/seo-geo-site-audit/.env`，填入：
+**前置：** `git`、`python3`、`node` + `npm`。Chrome 在首次跑 Lighthouse 时如未安装会由 `chrome-launcher` 自动下载。
 
 ```bash
-PAGESPEED_API_KEY=your_key_here
+# 1. 把仓库 clone 到稳定位置
+mkdir -p ~/.claude
+git clone https://github.com/iklynow-hue/seo-geo-skills ~/.claude/seo-geo-skills
+
+# 2. 把 skill 软链到 Claude Code 用户级 skills 目录
+mkdir -p ~/.claude/skills
+ln -s ~/.claude/seo-geo-skills/skills/seo-geo-site-audit ~/.claude/skills/seo-geo-site-audit
+
+# 3. 安装本地 Lighthouse runner 的 npm 依赖（一次性，约 120MB）
+cd ~/.claude/seo-geo-skills/skills/seo-geo-site-audit/scripts && npm install
 ```
+
+打开新的 Claude Code 会话，任何 SEO/GEO 审核请求都会自动触发本 skill。
+
+### 可选：仅项目级安装
+
+如果只想在某个项目内使用，把符号链接放到项目的 `.claude/skills/` 而不是 `~/.claude/skills/`：
+
+```bash
+mkdir -p .claude/skills
+ln -s ~/.claude/seo-geo-skills/skills/seo-geo-site-audit .claude/skills/seo-geo-site-audit
+```
+
+### 可选爬虫前置依赖
+
+爬虫只用 `urllib` 也能跑，但 SPA 站点上下面任意一个工具在场会更准确。可以先跳过——包装脚本会在运行时自动检测，你之后随时可以加 `--auto-install-prereqs`：
+
+- `scrapling[fetchers]` (`pip install "scrapling[fetchers]"` + `scrapling install`)
+- `lightpanda` (首次 auto-install 时下载到 `~/.local/bin/lightpanda`)
+- `agent-browser` (`npm install -g agent-browser` + `agent-browser install`)
 
 ## 更新
 
-如果你的本地安装方式是符号链接，更新会很简单：
+skill 是符号链接，更新只需一行：
 
 ```bash
-cd seo-geo-skills
-git pull
+cd ~/.claude/seo-geo-skills && git pull
 ```
 
-因为 `~/.agents/skills/seo-geo-site-audit` 直接指向这个仓库目录，所以 pull 完就会立即生效。
+如果 `skills/seo-geo-site-audit/scripts/` 下的 `package.json` 有变化，在该目录里再跑一次 `npm install`。
 
-如果你不是用符号链接，而是手动复制技能目录，那么请用仓库里的 `skills/seo-geo-site-audit` 覆盖你本地那份旧目录。
+## 用起来
 
-## 快速开始
+安装完后开一个新 Claude Code 会话，直接说：
 
-最简单的体验方式：
+- `帮我对 https://example.com 做一次 SEO 和 GEO 审核`
+- `帮我审核这个站点的 AI 可见性: https://example.com`
+- `跑一次 50 页的 SEO + GEO 审核 https://example.com，输出 HTML 报告，结果用中文`
 
-1. 克隆仓库并链接技能目录。
-2. 打开 Codex 或 Claude Code。
-3. 粘贴这句：
+Claude 会从 `~/.claude/skills/` 找到 `seo-geo-site-audit` skill，并按顺序问你：
 
-```text
-Use $seo-geo-site-audit to audit https://example.com
-```
+1. 抓取范围（1 / 10 / 50 / 自定义）
+2. 输出风格（Operator / Boss / Specialist）
+3. 性能证据（运行本地 Lighthouse 或跳过）
+4. 是否要 HTML 报告
+5. 最终输出语言
 
-4. 按顺序回答配置问题。
-5. 等待包装脚本运行完成，并查看生成的产物。
+如果第一句话里已经把这些都写清楚，会跳过问询直接开始。
 
 当前实现的几个限制，建议先了解：
 
 - 抓取页数范围：`1` 到 `50`
 - 预设模式：`fast=1`、`light=10`、`template=50`
 - 默认抓取范围：`light=10`
-- PageSpeed / 性能检测 URL 数：默认 `1` 个首页 URL，最大 `10`
+- Lighthouse URL 数：默认 `1` 个首页 URL，最大 `10`
 - SPA 的最佳努力扩展仍然是采样逻辑，不是完整应用爬虫
 - SPA 路由 hints 和猜测路径会标记为辅助发现，不会当成搜索引擎可爬证明
 
@@ -350,12 +371,12 @@ Use $seo-geo-site-audit to audit https://example.com
 
 ## SPA 与搜索爬取能力
 
-爬虫现在会为每个 HTML 页面保留两条证据线：
+爬虫会为每个 HTML 页面保留两条证据线：
 
 - `search_engine_visibility`：raw Googlebot 风格 HTTP 基线，不执行 JavaScript。
 - 浏览器渲染证据：SPA 在 JavaScript 运行后展示给用户的内容。
 
-这样做是为了避免把“浏览器能看到”误判成“搜索引擎一定能稳定看到”。如果内容、导航、结构化数据或路由只在渲染后出现，报告应该把它当作风险说明。只通过 `dom_route_hint` 或 `route_guess` 找到的页面属于审计辅助发现，不应写成搜索引擎可直接爬取。
+这样做是为了避免把"浏览器能看到"误判成"搜索引擎一定能稳定看到"。如果内容、导航、结构化数据或路由只在渲染后出现，报告应该把它当作风险说明。只通过 `dom_route_hint` 或 `route_guess` 找到的页面属于审计辅助发现，不应写成搜索引擎可直接爬取。
 
 ## 聊天中使用
 
@@ -369,28 +390,23 @@ Use $seo-geo-site-audit to audit https://example.com
 
 1. 抓取范围
 2. 输出风格
-3. 性能证据模式
+3. 性能证据（运行本地 Lighthouse 或跳过）
 4. 是否生成 HTML 报告
 5. 最后再询问输出语言
 
 默认首次测试建议：
 
-- 优先选择 `Local Lighthouse`
+- 保持本地 Lighthouse 打开
 - 输出风格先保持默认
 - 先用默认的 `10` 页 light audit
 - 如果你想拿到可分享的产物，可以打开 HTML 输出
 
 当前性能选项：
 
-- `1. Local Lighthouse (default)`
-- `2. Skip PageSpeed`
-- `3. Use PageSpeed API from the skill .env`
+- `1. 运行本地 Lighthouse（默认）`
+- `2. 跳过性能`
 
-性能采集默认只测 landing page / 首页。包装脚本会对 1 个首页 URL 分别跑 mobile 和 desktop，这样可以避免重型 SPA 路由导致 PageSpeed API 长时间卡住。只有在明确需要额外模板覆盖时，再使用 `--max-pagespeed-urls` 提高 URL 数量。
-
-如果你选择 API 路径，请先把 key 保存到：
-
-- `skills/seo-geo-site-audit/.env`
+性能采集默认只测 landing page / 首页。包装脚本会对 1 个首页 URL 分别跑 mobile 和 desktop，这样可以避免重型 SPA 路由导致 Lighthouse 等待时间过长。只有在明确需要额外模板覆盖时，再使用 `--max-pagespeed-urls` 提高 URL 数量。
 
 最后的语言选项是：
 
@@ -404,14 +420,6 @@ Use $seo-geo-site-audit to audit https://example.com
 - 英文和中文是内置的一等选项
 - 如果用户输入其他语言，agent 仍可先写结构化 `final-report.json`，再渲染出同语言 HTML
 
-Kilo Code 示例：
-
-```bash
-kilo run --auto --dir ~/Projects/mcmarkets 'Use $seo-geo-site-audit to audit https://www.mcmarkets.com. 要求: light mode, operator 风格, PageSpeed 用 skill .env 里的 API key, 输出 HTML 报告, 最终报告用中文. 如果这些偏好已经明确就不要重复提问只补问缺失项.'
-```
-
-在 shell 里建议用单引号包住 prompt，确保 `$seo-geo-site-audit` 不会被当成环境变量展开。
-
 如果 agent 没有主动逐项提问，可以更明确地这样说：
 
 ```text
@@ -420,10 +428,10 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 
 ## 终端使用
 
-正常运行请使用包装脚本：
+正常运行请使用包装脚本（把 `${SKILL_DIR}` 替换为你的实际安装路径，例如 `~/.claude/skills/seo-geo-site-audit`）：
 
 ```bash
-~/.agents/skills/seo-geo-site-audit/scripts/audit-site \
+"${SKILL_DIR}/scripts/audit-site" \
   https://example.com \
   --output-style operator
 ```
@@ -431,7 +439,7 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 中文 HTML 报告示例：
 
 ```bash
-~/.agents/skills/seo-geo-site-audit/scripts/audit-site \
+"${SKILL_DIR}/scripts/audit-site" \
   https://example.com \
   --mode template \
   --output-style operator \
@@ -442,9 +450,9 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 补全 `final-report.json` 后，再渲染最终交付版 HTML：
 
 ```bash
-~/.agents/skills/seo-geo-site-audit/scripts/render-report-html \
-  --report-json ~/.agents/skills/seo-geo-site-audit/runs/site-audit-example.com-<stamp>/final-report.json \
-  --out ~/.agents/skills/seo-geo-site-audit/runs/site-audit-example.com-<stamp>/audit-report.html
+"${SKILL_DIR}/scripts/render-report-html" \
+  --report-json "${SKILL_DIR}/runs/site-audit-example.com-<stamp>/final-report.json" \
+  --out "${SKILL_DIR}/runs/site-audit-example.com-<stamp>/audit-report.html"
 ```
 
 常用参数：
@@ -453,12 +461,10 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 - `--max-pages 1-50`
 - `--output-style boss|operator|specialist`
 - `--max-pagespeed-urls 1-10`（默认 `1`；只测首页，并分别跑 mobile 和 desktop）
-- `--pagespeed-provider local|api|api_with_fallback`
 - `--skip-pagespeed`
 - `--html-report`
 - `--report-language english|chinese`，用于包装脚本的证据页 HTML 和最终报告种子 JSON
 - `--fetcher auto|scrapling|lightpanda|agent_browser|chrome|urllib`
-- `--local-lighthouse-fallback`，作为 `api_with_fallback` 的兼容别名
 - `--auto-install-prereqs`
 - `--skip-prereq-check`
 - `--out-dir /path/to/output`
@@ -474,7 +480,7 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 
 技能里的最终 HTML 流程：
 
-1. 包装脚本先收集抓取与性能证据。
+1. 包装脚本先收集抓取与 Lighthouse 证据。
 2. 包装脚本写出 `evidence-report.html`，并生成 `final-report.json` 种子。
 3. agent 用所选语言写出最终审核结论，并补全 `final-report.json`。
 4. 渲染器再将其转换为最终的 `audit-report.html`。
@@ -483,12 +489,8 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
 
 这个仓库设计为可安全公开克隆。
 
-- 任何 API key 都不应该被硬编码到源码、文档或产物中。
-- PageSpeed key 只应该来自：
-  - `skills/seo-geo-site-audit/.env`
-  - `PAGESPEED_API_KEY`
-  - `GOOGLE_API_KEY`
-- 代码只应保存 `api_key_used: true/false`，绝不能保存真实 key。
+- 任何 API key、token、密钥都不应该被硬编码到源码、文档或产物中。
+- 本技能不依赖任何第三方 API key 来收集性能证据；Lighthouse 在本地运行。
 
 更多说明见：
 

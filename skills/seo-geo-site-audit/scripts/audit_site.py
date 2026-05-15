@@ -61,7 +61,6 @@ LANGUAGE_PACKS = {
         "occurrences": "Occurrences",
         "performance_coverage": "Performance Coverage",
         "provider": "Provider",
-        "api_key_used": "API key used",
         "representative_urls": "Representative URLs",
         "tested_urls": "Tested URLs",
         "category": "Category",
@@ -114,7 +113,6 @@ LANGUAGE_PACKS = {
         "occurrences": "出现次数",
         "performance_coverage": "性能覆盖",
         "provider": "来源",
-        "api_key_used": "是否使用 API Key",
         "representative_urls": "代表性 URL",
         "tested_urls": "测试 URL",
         "category": "类别",
@@ -265,6 +263,8 @@ def build_final_report_seed(
     pages_missing_signals_after_rendering = int(summary.get("pages_missing_signals_after_rendering", 0) or 0)
     pages_assisted_discovery = int(summary.get("pages_assisted_discovery", 0) or 0)
     pagespeed_provider = pagespeed.get("provider")
+    pagespeed_provider_label = "Local Lighthouse" if pagespeed_provider == "local_lighthouse" else (pagespeed_provider or "Not collected")
+    pagespeed_provider_label_zh = "本地 Lighthouse" if pagespeed_provider == "local_lighthouse" else (pagespeed_provider or "未收集")
     pagespeed_errors = pagespeed.get("errors", [])
     language = normalize_report_language(report_language)
     if language == "zh":
@@ -275,7 +275,7 @@ def build_final_report_seed(
             {"label": "输出风格", "value": label_output_style(output_style, report_language)},
             {"label": "置信度", "value": "待填写"},
             {"label": "已采样页面", "value": str(page_count)},
-            {"label": "性能证据", "value": str(pagespeed_provider or "未收集")},
+            {"label": "性能证据", "value": pagespeed_provider_label_zh},
         ]
         intro = "请用最终输出语言写一句执行摘要，并补全下方各部分。"
         overall = {
@@ -290,9 +290,9 @@ def build_final_report_seed(
             f"当前包装脚本采样了 {page_count} 个页面。",
         ]
         if pagespeed_provider:
-            method_notes.append(f"当前性能证据来源：{pagespeed_provider}。")
+            method_notes.append(f"当前性能证据来源：{pagespeed_provider_label_zh}（lab 数据，不含 CrUX 字段数据）。")
         if pagespeed_errors:
-            method_notes.append("PageSpeed 存在部分失败，请在最终结论中明确说明。")
+            method_notes.append("Lighthouse 存在部分失败，请在最终结论中明确说明。")
         if pages_requiring_js_content or pages_requiring_js_navigation or pages_assisted_discovery:
             method_notes.append(
                 "搜索引擎基线提示："
@@ -314,7 +314,7 @@ def build_final_report_seed(
             {"label": "Output style", "value": label_output_style(output_style, report_language)},
             {"label": "Confidence", "value": "Fill after scoring"},
             {"label": "Pages sampled", "value": str(page_count)},
-            {"label": "Performance evidence", "value": str(pagespeed_provider or "Not collected")},
+            {"label": "Performance evidence", "value": pagespeed_provider_label},
         ]
         intro = "Replace this with a one-line executive framing in the final output language and then complete every section below."
         overall = {
@@ -329,9 +329,11 @@ def build_final_report_seed(
             f"The wrapper sampled {page_count} page(s) in this run.",
         ]
         if pagespeed_provider:
-            method_notes.append(f"Performance evidence currently comes from {pagespeed_provider}.")
+            method_notes.append(
+                f"Performance evidence currently comes from {pagespeed_provider_label} (lab data, no CrUX field data)."
+            )
         if pagespeed_errors:
-            method_notes.append("PageSpeed recorded partial failures; mention that clearly in the final report.")
+            method_notes.append("Lighthouse recorded partial failures; mention that clearly in the final report.")
         if pages_requiring_js_content or pages_requiring_js_navigation or pages_assisted_discovery:
             method_notes.append(
                 "Search baseline note: "
@@ -706,7 +708,6 @@ def build_html_report(
       <article class="panel">
         <h2>{html.escape(pack['performance_coverage'])}</h2>
         <p><strong>{html.escape(pack['provider'])}:</strong> {html.escape(str((pagespeed or {}).get('provider', 'n/a')))}</p>
-        <p><strong>{html.escape(pack['api_key_used'])}:</strong> {human_bool(bool((pagespeed or {}).get('api_key_used')), pack['yes'], pack['no'])}</p>
         <p><strong>{html.escape(pack['representative_urls'])}:</strong> {html.escape(', '.join(tested_urls) or pack['none'])}</p>
         {fmt_list([f"{item.get('strategy', 'unknown')}: {item.get('url', 'n/a')} — {item.get('error', 'error')}" for item in pagespeed_errors], pack['none'])}
       </article>
@@ -784,12 +785,12 @@ def main() -> int:
         "--out-dir",
         help="Directory for audit artifacts. Defaults to <skill-dir>/runs/site-audit-<host>-<stamp>.",
     )
-    parser.add_argument("--skip-pagespeed", action="store_true", help="Skip PageSpeed collection.")
+    parser.add_argument("--skip-pagespeed", action="store_true", help="Skip local Lighthouse performance collection.")
     parser.add_argument(
         "--max-pagespeed-urls",
         type=int,
         default=DEFAULT_MAX_PAGESPEED_URLS,
-        help="Maximum URLs to test with PageSpeed. Default is 1 homepage URL; raise this only when you need extra template coverage.",
+        help="Maximum URLs to test with local Lighthouse. Default is 1 homepage URL (mobile + desktop). Raise this only when you need extra template coverage.",
     )
     parser.add_argument(
         "--html-report",
@@ -802,22 +803,10 @@ def main() -> int:
         help="Language for the wrapper evidence HTML and seeded final-report.json. Built-in localization currently supports English and Chinese.",
     )
     parser.add_argument(
-        "--pagespeed-provider",
-        choices=("local", "api", "api_with_fallback"),
-        default="local",
-        help="Performance evidence source. Default: local Lighthouse.",
-    )
-    parser.add_argument("--api-key", help="Google PageSpeed Insights API key.")
-    parser.add_argument(
         "--fetcher",
         default="auto",
         choices=["auto", "scrapling", "lightpanda", "agent_browser", "chrome", "urllib"],
         help="Preferred fetcher for crawl. 'auto' tries Scrapling → Lightpanda → agent-browser → attached Chrome → urllib.",
-    )
-    parser.add_argument(
-        "--local-lighthouse-fallback",
-        action="store_true",
-        help="Compatibility alias for --pagespeed-provider api_with_fallback.",
     )
     parser.add_argument(
         "--skip-prereq-check",
@@ -830,7 +819,6 @@ def main() -> int:
         help="Auto-install missing fetcher prerequisites before running the audit.",
     )
     args = parser.parse_args()
-    pagespeed_provider = "api_with_fallback" if args.local_lighthouse_fallback else args.pagespeed_provider
 
     max_pages = pick_max_pages(args.mode, args.max_pages)
     out_dir = build_output_dir(args.url, args.out_dir)
@@ -876,13 +864,9 @@ def main() -> int:
             str(crawl_path),
             "--max-urls",
             str(max(1, min(10, args.max_pagespeed_urls))),
-            "--provider",
-            pagespeed_provider,
             "--out",
             str(pagespeed_path),
         ]
-        if args.api_key:
-            pagespeed_cmd.extend(["--api-key", args.api_key])
         pagespeed_result = run_command(pagespeed_cmd, check=False)
         if pagespeed_result.stdout:
             print(pagespeed_result.stdout, end="")

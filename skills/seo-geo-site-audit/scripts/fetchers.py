@@ -21,7 +21,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -35,7 +34,6 @@ from typing import Any
 
 LIGHTPANDA_DIR = Path.home() / ".local" / "bin"
 LIGHTPANDA_BIN = LIGHTPANDA_DIR / "lightpanda"
-LIGHTPANDA_CDP_PORT = 19222
 DEFAULT_UA = "seo-geo-site-audit/1.0 (+https://example.invalid)"
 SEARCH_ENGINE_UA = (
     "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) "
@@ -346,6 +344,19 @@ def check_prerequisites(auto_install: bool = True) -> dict[str, dict[str, Any]]:
         "installed_during_run": ab_installed_now,
     }
 
+    # --- Lighthouse (node + scripts/node_modules/lighthouse) ---
+    node_available = is_node_available()
+    lh_installed = is_lighthouse_npm_installed()
+    lh_installed_now = False
+    if node_available and not lh_installed and auto_install:
+        lh_installed_now = install_lighthouse_npm()
+        lh_installed = is_lighthouse_npm_installed()
+    status["lighthouse"] = {
+        "available": node_available and lh_installed,
+        "installed_during_run": lh_installed_now,
+        "node_available": node_available,
+    }
+
     return status
 
 
@@ -355,6 +366,7 @@ def print_prereq_summary(status: dict[str, dict[str, Any]]) -> None:
         "scrapling": "Scrapling (Camoufox)",
         "lightpanda": "Lightpanda",
         "agent_browser": "agent-browser",
+        "lighthouse": "Lighthouse (node + scripts/node_modules)",
     }
     for key, label in labels.items():
         info = status.get(key, {})
@@ -365,7 +377,10 @@ def print_prereq_summary(status: dict[str, dict[str, Any]]) -> None:
         elif avail:
             print(f"  ✓ {label} — available")
         else:
-            print(f"  ✗ {label} — not available (will skip)")
+            extra = ""
+            if key == "lighthouse" and not info.get("node_available", True):
+                extra = " (node not on PATH)"
+            print(f"  ✗ {label} — not available{extra} (performance evidence will be skipped)")
 
 
 # ---------------------------------------------------------------------------
@@ -813,113 +828,35 @@ def fetch_rendered(
 
 
 # ---------------------------------------------------------------------------
-# Lightpanda CDP server management (for local Lighthouse)
+# Lighthouse prerequisite detection
 # ---------------------------------------------------------------------------
 
-_lightpanda_process: subprocess.Popen | None = None
+LIGHTHOUSE_RUNNER = Path(__file__).resolve().parent / "run_lighthouse.mjs"
+LIGHTHOUSE_NODE_MODULES = LIGHTHOUSE_RUNNER.parent / "node_modules" / "lighthouse"
 
 
-def start_lightpanda_cdp(port: int = LIGHTPANDA_CDP_PORT) -> subprocess.Popen | None:
-    """Start Lightpanda in CDP server mode. Returns the process or None."""
-    global _lightpanda_process
-    if _lightpanda_process is not None and _lightpanda_process.poll() is None:
-        return _lightpanda_process  # Already running
-
-    bin_path = _lightpanda_binary_path()
-    if not Path(bin_path).exists() and not shutil.which(bin_path):
-        return None
-
-    try:
-        proc = subprocess.Popen(
-            [
-                bin_path, "serve",
-                "--host", "127.0.0.1",
-                "--port", str(port),
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        time.sleep(2)  # Give it a moment to start
-        if proc.poll() is not None:
-            print("[fetchers] Lightpanda CDP server exited immediately", file=sys.stderr)
-            return None
-        _lightpanda_process = proc
-        return proc
-    except Exception as exc:
-        print(f"[fetchers] Failed to start Lightpanda CDP: {exc}", file=sys.stderr)
-        return None
+def is_node_available() -> bool:
+    return shutil.which("node") is not None
 
 
-def stop_lightpanda_cdp() -> None:
-    """Stop the Lightpanda CDP server if running."""
-    global _lightpanda_process
-    if _lightpanda_process is not None:
-        try:
-            _lightpanda_process.terminate()
-            _lightpanda_process.wait(timeout=5)
-        except Exception:
-            try:
-                _lightpanda_process.kill()
-            except Exception:
-                pass
-        _lightpanda_process = None
+def is_lighthouse_npm_installed() -> bool:
+    """Check whether the scripts/ npm package has been installed."""
+    return LIGHTHOUSE_NODE_MODULES.exists()
 
 
-def get_cdp_endpoint(port: int = LIGHTPANDA_CDP_PORT) -> str:
-    """Return the CDP WebSocket endpoint URL."""
-    return f"http://127.0.0.1:{port}"
-
-
-def is_lighthouse_available() -> bool:
-    """Check if Lighthouse CLI is available (either directly or via npx)."""
-    return shutil.which("lighthouse") is not None or shutil.which("npx") is not None
-
-
-def run_local_lighthouse(
-    url: str,
-    strategy: str = "mobile",
-    cdp_port: int = LIGHTPANDA_CDP_PORT,
-    timeout: int = 120,
-) -> dict | None:
-    """Run Lighthouse locally via CDP and return parsed results.
-
-    Starts Lightpanda CDP when available, then runs Lighthouse against that
-    endpoint. If Lightpanda is unavailable, falls back to Lighthouse's normal
-    browser launch path instead of forcing a dead CDP port.
-    """
-    was_running = _lightpanda_process is not None and _lightpanda_process.poll() is None
-
-    # Ensure CDP server is running
-    cdp_proc = start_lightpanda_cdp(cdp_port)
-
-    tmp_dir = tempfile.mkdtemp(prefix="lighthouse-")
-    output_path = os.path.join(tmp_dir, "result.json")
-
-    try:
-        # Try lighthouse directly, then npx
-        for cmd_prefix in ([shutil.which("lighthouse") or "lighthouse"], ["npx", "lighthouse"]):
-            cmd = cmd_prefix + [
-                url,
-                "--output=json",
-                f"--output-path={output_path}",
-                "--quiet",
-                "--only-categories=performance,accessibility,best-practices,seo",
-            ]
-            if strategy == "desktop":
-                cmd.append("--preset=desktop")
-            if cdp_proc is not None:
-                cmd.append(f"--port={cdp_port}")
-            try:
-                result = _run(cmd, timeout=timeout)
-                if result.returncode == 0 and os.path.exists(output_path):
-                    return json.loads(Path(output_path).read_text(encoding="utf-8"))
-            except (subprocess.TimeoutExpired, Exception):
-                continue
-        return None
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        if not was_running and cdp_proc is not None:
-            stop_lightpanda_cdp()
+def install_lighthouse_npm() -> bool:
+    """Run `npm install` inside the scripts/ directory to fetch lighthouse + chrome-launcher."""
+    if shutil.which("npm") is None:
+        print("[fetchers] npm not found on PATH. Install Node.js to run Lighthouse.", file=sys.stderr)
+        return False
+    scripts_dir = LIGHTHOUSE_RUNNER.parent
+    print(f"[fetchers] Installing Lighthouse dependencies into {scripts_dir}...")
+    result = _run(["npm", "install", "--no-audit", "--no-fund"], cwd=str(scripts_dir), timeout=600)
+    if result.returncode != 0:
+        print(f"[fetchers] npm install failed: {result.stderr.strip()[-400:]}", file=sys.stderr)
+        return False
+    print("[fetchers] Lighthouse dependencies installed.")
+    return True
 
 
 # ---------------------------------------------------------------------------

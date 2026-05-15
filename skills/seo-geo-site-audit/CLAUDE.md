@@ -2,17 +2,16 @@
 
 Use this skill when the user wants an SEO audit, GEO audit, AI visibility review, or a structured site-quality audit for a public website.
 
+This skill targets Claude Code. It is invoked as `$seo-geo-site-audit` and runs from wherever the skill is installed (typically `~/.claude/skills/seo-geo-site-audit/` or this repo, symlinked into that location). Refer to the wrapper script as `${SKILL_DIR}/scripts/audit-site`; do not hardcode absolute user paths into chat replies.
+
 Default operating rules:
 
 - Ask the setup questions one by one before crawling if scope is incomplete.
-- If the user already specifies scope, output style, PageSpeed handling, HTML preference, and final output language clearly, do not re-ask them. Continue with those stated preferences.
+- If the user already specifies scope, output style, HTML preference, and final output language clearly, do not re-ask them. Continue with those stated preferences.
 - If the user only specifies some preferences, ask only for the missing items.
 - Treat language confirmation as mandatory. Do not consider setup complete until the user confirms the final output language or explicitly accepts the default English.
-- Use the wrapper script for normal audits:
-  `/Users/klyment/.agents/skills/seo-geo-site-audit/scripts/audit-site`
-- Prefer `--pagespeed-provider local` by default.
-- Only use PageSpeed API when the user explicitly chooses it.
-- If the user wants PageSpeed API mode, ask them to save the key in `/Users/klyment/.agents/skills/seo-geo-site-audit/.env` first, then continue.
+- Use the wrapper script for normal audits: `${SKILL_DIR}/scripts/audit-site`.
+- Performance evidence is always **local Lighthouse** (Chrome managed by `chrome-launcher`, invoked through `scripts/run_lighthouse.mjs`). There is no remote API path. The only performance choice is on / skip.
 - Ask the output language as a required question before writing the report. If it was not captured during setup, ask it as the final question after crawl/evidence review:
   `1. English (default)`
   `2. Chinese`
@@ -22,9 +21,8 @@ Default operating rules:
 Security rules:
 
 - Never hardcode API keys, tokens, or secrets in this repo.
-- Never write PageSpeed API keys to tracked files, generated artifacts, docs, templates, or examples.
-- Only accept a PageSpeed API key from the skill-local `.env` file or runtime environment variables.
-- Do not include raw keys in error messages, logs, manifests, or saved JSON/HTML outputs.
+- The skill does not require any third-party API key. Do not ask the user for one.
+- Do not include credentials or private data in error messages, logs, manifests, or saved JSON/HTML outputs.
 
 Workflow summary:
 

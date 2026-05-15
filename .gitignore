@@ -9,7 +9,10 @@ __pycache__/
 *.pyo
 .env
 .env.*
-!skills/seo-geo-site-audit/.env.example
+
+# Node (Lighthouse runner deps in scripts/)
+skills/seo-geo-site-audit/scripts/node_modules/
+skills/seo-geo-site-audit/scripts/package-lock.json
 
 # OS
 .DS_Store
