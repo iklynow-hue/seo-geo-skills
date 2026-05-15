@@ -341,6 +341,12 @@ def build_html(payload: dict) -> str:
     for section in sections:
         section_title = str(section.get("title", "Section"))
         section_id = slugify(section_title)
+        passed = [str(item) for item in section.get("passed_items", [])]
+        issues = section.get("issues", [])
+        actions = [str(item) for item in section.get("recommended_actions", [])]
+        passed_count = f"<span class='count'>{len(passed)}</span>" if passed else ""
+        issues_count = f"<span class='count'>{len(issues)}</span>" if issues else ""
+        actions_count = f"<span class='count'>{len(actions)}</span>" if actions else ""
         rendered_sections.append(
             "<section class='finding-section panel' id='{id}'>"
             "<div class='section-heading'>"
@@ -352,16 +358,16 @@ def build_html(payload: dict) -> str:
             "</div>"
             "<div class='finding-grid'>"
             "<article class='finding-block'>"
-            f"<h3>{html.escape(ui['passed_items'])}</h3>"
-            f"{render_list([str(item) for item in section.get('passed_items', [])], ui['not_provided'])}"
+            f"<h3>{html.escape(ui['passed_items'])}{passed_count}</h3>"
+            f"{render_list(passed, ui['not_provided'])}"
+            "</article>"
+            "<article class='finding-block issues-block'>"
+            f"<h3>{html.escape(ui['issues'])}{issues_count}</h3>"
+            f"{render_issue_items(issues, ui['not_provided'])}"
             "</article>"
             "<article class='finding-block'>"
-            f"<h3>{html.escape(ui['issues'])}</h3>"
-            f"{render_issue_items(section.get('issues', []), ui['not_provided'])}"
-            "</article>"
-            "<article class='finding-block'>"
-            f"<h3>{html.escape(ui['recommended_actions'])}</h3>"
-            f"{render_list([str(item) for item in section.get('recommended_actions', [])], ui['not_provided'])}"
+            f"<h3>{html.escape(ui['recommended_actions'])}{actions_count}</h3>"
+            f"{render_list(actions, ui['not_provided'])}"
             "</article>"
             "</div>"
             "</section>"
@@ -620,17 +626,32 @@ def build_html(payload: dict) -> str:
       min-width: 56px;
       text-align: center;
     }}
+    /* Findings stack vertically — single comfortable reading column for CJK
+       and long detail paragraphs. Wide screens get max-width, not extra cols. */
     .finding-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
-      gap: 14px;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 16px;
     }}
     .finding-block {{
-      padding: 20px;
+      padding: 24px 28px;
       border-radius: var(--radius-container);
-      background: var(--surface);
+      background: var(--bg);
       border: 1px solid var(--line);
       min-width: 0;
+    }}
+    .finding-block.issues-block {{ background: var(--surface); }}
+    .finding-block h3 {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }}
+    .finding-block .count {{
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--muted-soft);
+      letter-spacing: 0;
     }}
 
     /* --- Lists -------------------------------------------------------- */

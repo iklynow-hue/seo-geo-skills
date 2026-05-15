@@ -16,3 +16,6 @@ skills/seo-geo-site-audit/scripts/package-lock.json
 
 # OS
 .DS_Store
+
+# Local sample renders
+sample-report.html

@@ -20,6 +20,22 @@ A no-clarify session preference, a "be terse" preference, or a "just go" tone do
 
 If the user pushes back ("just go", "stop asking"), still confirm at minimum the output language before writing the final report, because language cannot be guessed safely.
 
+### Default language is English — do not infer from prompt language
+
+When the user picks the "default" path (option 1 to any question, or a blanket "use defaults"), or when their answer is missing or unrecognized, the output language is **English**. This holds regardless of:
+
+- the language the user is writing the request in (someone asking in Chinese still gets an English report by default),
+- the language of the target domain (a `.cn` site still defaults to English),
+- the agent's session locale.
+
+Only an explicit, unambiguous selection switches the report to a non-English language:
+
+- typing `2` at the language question, or
+- saying "Chinese" / "中文" / "Spanish" / "in <language>" / "用中文" / "report in <language>", or
+- providing the `--report-language` flag.
+
+If the user said "default" or didn't answer, render English. Do not auto-translate based on tone.
+
 This skill is optimized for:
 
 - site-level audits with a capped crawl sample
