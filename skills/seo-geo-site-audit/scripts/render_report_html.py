@@ -373,47 +373,45 @@ def build_html(payload: dict) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{html.escape(title)} - {html.escape(target_url)}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
+    /* Ollama-inspired minimalist palette. Pure white canvas, grayscale only,
+       binary radius (12px containers / 9999px pills), zero shadows, system fonts. */
     :root {{
       color-scheme: light;
       --bg: #ffffff;
-      --ink: #1c1c1e;
-      --muted: #555a6a;
-      --line: rgb(224,226,232);
-      --blue: #5b76fe;
-      --blue-pressed: #2a41b6;
-      --panel: #ffffff;
-      --coral: #ffc6c6;
-      --rose: #ffd8f4;
-      --teal: #c3faf5;
-      --orange: #ffe6cd;
-      --green: #d9f5e8;
-      --yellow: #fff1bf;
-      --radius-sm: 8px;
-      --radius-md: 12px;
-      --radius-lg: 24px;
-      --shadow: rgb(224,226,232) 0px 0px 0px 1px;
-      --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
-      --font-body: 'Noto Sans', 'Inter', sans-serif;
+      --surface: #fafafa;
+      --ink: #000000;
+      --ink-near: #262626;
+      --ink-button: #404040;
+      --muted: #525252;
+      --muted-soft: #737373;
+      --silver: #a3a3a3;
+      --line: #e5e5e5;
+      --line-dark: #d4d4d4;
+      --radius-container: 12px;
+      --radius-pill: 9999px;
+      --font-display: "SF Pro Rounded", "SF Pro Display", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      --font-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }}
     * {{ box-sizing: border-box; }}
     html {{ scroll-behavior: smooth; }}
     body {{
       margin: 0;
-      background:
-        radial-gradient(circle at top left, rgba(255, 216, 244, 0.55), transparent 28%),
-        radial-gradient(circle at top right, rgba(195, 250, 245, 0.45), transparent 28%),
-        linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%);
+      background: var(--bg);
       color: var(--ink);
       font-family: var(--font-body);
-      line-height: 1.55;
+      font-size: 16px;
+      line-height: 1.5;
       -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }}
-    a {{ color: var(--blue); text-decoration: none; }}
-    main {{ max-width: 1240px; margin: 0 auto; padding: 20px 20px 80px; }}
+    a {{ color: var(--ink); text-decoration: none; border-bottom: 1px solid transparent; }}
+    a:hover {{ border-bottom-color: var(--ink); }}
+    main {{ max-width: 1080px; margin: 0 auto; padding: 24px 24px 96px; }}
+    code, pre, .mono {{ font-family: var(--font-mono); }}
+
+    /* --- Top navigation ----------------------------------------------- */
     .topbar {{
       position: sticky;
       top: 0;
@@ -422,341 +420,345 @@ def build_html(payload: dict) -> str:
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      padding: 12px 20px;
-      background: rgba(255,255,255,0.84);
-      backdrop-filter: blur(10px);
-      box-shadow: var(--shadow);
+      padding: 12px 24px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
     }}
     .toplink {{
       color: var(--ink);
       font-family: var(--font-display);
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
+      font-size: 14px;
+      font-weight: 500;
+      border-bottom: none;
     }}
-    .nav {{
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }}
+    .nav {{ display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }}
     .nav a {{
       color: var(--muted);
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: rgba(91,118,254,0.06);
-      box-shadow: inset 0 0 0 1px rgba(91,118,254,0.08);
-      font-size: 12px;
-      transition: background 120ms ease, color 120ms ease;
+      padding: 8px 14px;
+      border-radius: var(--radius-pill);
+      background: var(--bg);
+      border: 1px solid transparent;
+      font-size: 13px;
+      transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
     }}
     .nav a:hover {{
-      background: rgba(91,118,254,0.12);
-      color: var(--blue-pressed);
-    }}
-    .hero {{
-      padding: 48px 0 28px;
-      display: block;
-    }}
-    h1 {{
-      margin: 0 0 16px;
-      font-family: var(--font-display);
-      font-size: clamp(2rem, 5vw, 3.25rem);
-      line-height: 1.02;
-      letter-spacing: -0.05em;
-      font-weight: 800;
-      max-width: 20ch;
-    }}
-    .report-prefix {{
+      background: var(--line);
       color: var(--ink);
+      border-color: var(--line);
     }}
-    .report-domain {{
-      color: var(--blue-pressed);
+
+    /* --- Hero --------------------------------------------------------- */
+    .hero {{ padding: 80px 0 48px; }}
+    h1 {{
+      margin: 0 0 20px;
+      font-family: var(--font-display);
+      font-size: clamp(2.25rem, 5vw, 3rem);
+      line-height: 1;
+      letter-spacing: -0.02em;
+      font-weight: 500;
+      max-width: 28ch;
+      overflow-wrap: anywhere;
     }}
-    .hero-links {{
-      display: contents;
-    }}
-    .hero-meta {{
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 4px;
-      font-size: 13px;
-      color: var(--muted);
-    }}
+    .report-prefix, .report-domain {{ color: var(--ink); }}
+    .hero-meta {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 14px; color: var(--muted-soft); }}
     .meta-chip {{
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.72);
-      box-shadow: var(--shadow);
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: var(--radius-pill);
+      background: var(--bg);
+      border: 1px solid var(--line);
       color: var(--muted);
     }}
-    .meta-chip a {{
-      color: var(--blue-pressed);
-      font-weight: 600;
-    }}
+    .meta-chip a {{ color: var(--ink); font-weight: 500; border-bottom-color: var(--line); }}
+    .meta-chip a:hover {{ border-bottom-color: var(--ink); }}
+
+    /* --- Panels ------------------------------------------------------- */
     .panel {{
-      background: var(--panel);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow);
-      padding: 24px;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-container);
+      padding: 28px;
+      min-width: 0;
     }}
-    .section-block {{ margin-top: 22px; }}
-    .section-block h2 {{
+    .section-block {{ margin-top: 56px; }}
+    .section-block > h2 {{
       font-family: var(--font-display);
-      font-size: 38px;
-      line-height: 1.04;
-      letter-spacing: -0.05em;
-      margin: 0 0 16px;
+      font-size: clamp(1.75rem, 3.5vw, 2.25rem);
+      line-height: 1.11;
+      letter-spacing: -0.01em;
+      font-weight: 500;
+      margin: 0 0 24px;
     }}
+
+    /* --- Snapshot ----------------------------------------------------- */
     .snapshot-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
       gap: 12px;
     }}
     .snapshot-card {{
-      padding: 16px;
-      border-radius: var(--radius-md);
-      background: #fff;
-      box-shadow: var(--shadow);
+      padding: 20px;
+      border-radius: var(--radius-container);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      min-width: 0;
     }}
     .snapshot-label {{
-      font-size: 11px;
+      font-size: 12px;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
+      color: var(--muted-soft);
       margin-bottom: 8px;
     }}
     .snapshot-value {{
       font-family: var(--font-display);
       font-size: 20px;
       line-height: 1.2;
-      font-weight: 700;
-      letter-spacing: -0.03em;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }}
-    .highlight-grid {{
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 18px;
-      margin-top: 18px;
-    }}
-    .highlight-card h3,
-    .metric-card h3,
-    .finding-block h3 {{
-      margin: 0 0 12px;
-      font-family: var(--font-display);
-      font-size: 22px;
-      letter-spacing: -0.03em;
-    }}
-    .highlight-card.wins {{ background: var(--teal); }}
-    .highlight-card.issues {{ background: var(--coral); }}
-    .score-table {{
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-    }}
-    .score-table th,
-    .score-table td {{
+
+    /* --- Scorecard ---------------------------------------------------- */
+    .scorecard-wrap {{ display: grid; gap: 20px; }}
+    .score-table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
+    .score-table th, .score-table td {{
       text-align: left;
-      padding: 12px 10px;
+      padding: 14px 12px;
       border-bottom: 1px solid var(--line);
       vertical-align: top;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }}
-    .score-table thead th {{ color: var(--muted); font-weight: 600; }}
-    .scorecard-wrap {{
-      display: grid;
-      gap: 18px;
+    .score-table thead th {{
+      color: var(--muted-soft);
+      font-weight: 500;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }}
+    .score-table tbody tr:last-child td {{ border-bottom: none; }}
     .score-total {{
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      padding: 16px 18px;
-      border-radius: var(--radius-md);
-      background: rgba(91,118,254,0.08);
+      padding: 20px 24px;
+      border-radius: var(--radius-container);
+      background: var(--surface);
+      border: 1px solid var(--line);
     }}
     .score-total span {{
-      color: var(--muted);
+      color: var(--muted-soft);
       font-size: 12px;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
     }}
     .score-total strong {{
       font-family: var(--font-display);
-      font-size: 28px;
+      font-size: 32px;
       line-height: 1;
-      letter-spacing: -0.04em;
+      letter-spacing: -0.02em;
+      font-weight: 500;
     }}
-    .finding-section {{ margin-top: 18px; }}
+    .highlight-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }}
+    .highlight-card h3,
+    .metric-card h3,
+    .finding-block h3 {{
+      margin: 0 0 14px;
+      font-family: var(--font-display);
+      font-size: 18px;
+      letter-spacing: -0.01em;
+      font-weight: 500;
+      color: var(--ink-near);
+    }}
+
+    /* --- Section findings -------------------------------------------- */
+    .finding-section {{ margin-top: 24px; }}
     .section-heading {{
       display: flex;
-      align-items: start;
+      align-items: flex-start;
       justify-content: space-between;
       gap: 16px;
-      margin-bottom: 18px;
+      margin-bottom: 24px;
     }}
+    .section-heading > div:first-child {{ min-width: 0; flex: 1; }}
     .section-kicker {{
-      color: var(--muted);
+      color: var(--muted-soft);
       font-size: 11px;
-      text-transform: uppercase;
       letter-spacing: 0.08em;
+      text-transform: uppercase;
       margin-bottom: 6px;
     }}
     .section-heading h2 {{
       margin: 0;
       font-family: var(--font-display);
-      font-size: 30px;
-      line-height: 1.05;
-      letter-spacing: -0.04em;
+      font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+      font-weight: 500;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }}
     .score-pill {{
-      padding: 10px 16px;
-      border-radius: 999px;
-      background: var(--yellow);
+      flex-shrink: 0;
+      padding: 8px 20px;
+      border-radius: var(--radius-pill);
+      background: var(--line);
+      color: var(--ink-near);
       font-family: var(--font-display);
-      font-size: 18px;
-      font-weight: 800;
-      min-width: 64px;
+      font-size: 16px;
+      font-weight: 500;
+      min-width: 56px;
       text-align: center;
     }}
     .finding-grid {{
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
       gap: 14px;
     }}
     .finding-block {{
-      padding: 18px;
-      border-radius: var(--radius-md);
-      background: rgba(255,255,255,0.9);
-      box-shadow: var(--shadow);
+      padding: 20px;
+      border-radius: var(--radius-container);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      min-width: 0;
     }}
-    ul {{ margin: 0; padding-left: 18px; }}
+
+    /* --- Lists -------------------------------------------------------- */
+    ul {{ margin: 0; padding-left: 20px; }}
+    li {{ overflow-wrap: anywhere; word-break: break-word; }}
     li + li {{ margin-top: 8px; }}
-    .issues-list {{
-      list-style: none;
-      padding: 0;
-      display: grid;
-      gap: 12px;
-    }}
+    .issues-list {{ list-style: none; padding: 0; display: grid; gap: 16px; }}
     .issue-item {{
       display: grid;
-      grid-template-columns: auto 1fr;
+      grid-template-columns: auto minmax(0, 1fr);
       gap: 10px;
       align-items: start;
     }}
+    .issue-item > div {{ min-width: 0; }}
+    .issue-item strong {{ overflow-wrap: anywhere; word-break: break-word; }}
     .severity {{
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 42px;
-      padding: 6px 10px;
-      border-radius: 999px;
+      min-width: 36px;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
       font-family: var(--font-display);
       font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
     }}
-    .sev-p0 {{ background: #600000; color: #fff; }}
-    .sev-p1 {{ background: #ffd8f4; color: #5a2555; }}
-    .sev-p2 {{ background: #ffe6cd; color: #7d4d00; }}
-    .sev-p3 {{ background: #d9f5e8; color: #0d6540; }}
-    .sev-generic {{ background: #eef0f6; color: #3b4252; }}
-    .issue-item p {{
-      margin: 6px 0 0;
-      color: var(--muted);
-      font-size: 14px;
-    }}
+    /* Severity in pure grayscale — saturation conveyed by lightness, not hue */
+    .sev-p0 {{ background: var(--ink); color: var(--bg); }}
+    .sev-p1 {{ background: var(--ink-button); color: var(--bg); }}
+    .sev-p2 {{ background: var(--line); color: var(--ink-near); }}
+    .sev-p3 {{ background: var(--bg); color: var(--muted-soft); border: 1px solid var(--line); }}
+    .sev-generic {{ background: var(--surface); color: var(--muted); border: 1px solid var(--line); }}
+    .issue-item p {{ margin: 6px 0 0; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; word-break: break-word; }}
+
+    /* --- Performance / Roadmap --------------------------------------- */
     .metric-grid {{
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+      gap: 16px;
     }}
-    .metric-card {{
-      background: linear-gradient(180deg, rgba(253,224,240,0.42), rgba(255,255,255,0.92));
-    }}
-    .metric-list {{
-      display: grid;
-      gap: 10px;
-      margin: 0 0 14px;
-    }}
-    .metric-list div {{
-      display: grid;
-      gap: 4px;
-    }}
+    .metric-card {{ background: var(--bg); }}
+    .metric-list {{ display: grid; gap: 12px; margin: 0 0 16px; }}
+    .metric-list div {{ display: grid; gap: 4px; }}
     .metric-list dt {{
-      color: var(--muted);
+      color: var(--muted-soft);
       font-size: 12px;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
     }}
     .metric-list dd {{
       margin: 0;
       font-family: var(--font-display);
       font-size: 18px;
-      font-weight: 700;
-      letter-spacing: -0.03em;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      overflow-wrap: anywhere;
     }}
     .metric-subtitle {{
       margin-bottom: 8px;
-      color: var(--muted);
+      color: var(--muted-soft);
       font-size: 12px;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
     }}
     .roadmap-grid {{
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
       gap: 14px;
     }}
     .roadmap-column {{
-      padding: 18px;
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow);
-      background: rgba(255,255,255,0.95);
+      padding: 20px;
+      border-radius: var(--radius-container);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      min-width: 0;
     }}
     .roadmap-column h3 {{
-      margin: 0 0 12px;
+      margin: 0 0 14px;
       font-family: var(--font-display);
-      font-size: 24px;
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
     }}
-    .roadmap-p0 {{ background: var(--coral); }}
-    .roadmap-p1 {{ background: var(--rose); }}
-    .roadmap-p2 {{ background: var(--orange); }}
-    .roadmap-p3 {{ background: var(--green); }}
-    .empty {{
-      color: var(--muted);
-      font-style: italic;
-      margin: 0;
-    }}
+    /* Roadmap priority shading stays grayscale; rank is conveyed by tint depth */
+    .roadmap-p0 {{ background: var(--ink); color: var(--bg); border-color: var(--ink); }}
+    .roadmap-p0 h3, .roadmap-p0 li {{ color: var(--bg); }}
+    .roadmap-p1 {{ background: var(--ink-button); color: var(--bg); border-color: var(--ink-button); }}
+    .roadmap-p1 h3, .roadmap-p1 li {{ color: var(--bg); }}
+    .roadmap-p2 {{ background: var(--surface); }}
+    .roadmap-p3 {{ background: var(--bg); }}
+
+    .empty {{ color: var(--silver); font-style: normal; margin: 0; }}
     footer {{
-      margin-top: 28px;
+      margin-top: 80px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 6px;
       flex-wrap: wrap;
-      color: var(--muted);
-      font-size: 12px;
+      color: var(--muted-soft);
+      font-size: 13px;
     }}
-    footer a {{
-      color: var(--blue-pressed);
-      font-weight: 600;
+    footer a {{ color: var(--ink); font-weight: 500; }}
+
+    /* --- Responsive: stack cleanly + tighten chrome on small screens -- */
+    @media (max-width: 768px) {{
+      main {{ padding: 16px 16px 64px; }}
+      .topbar {{ padding: 10px 16px; gap: 8px; }}
+      .nav {{ gap: 4px; }}
+      .nav a {{ padding: 6px 10px; font-size: 12px; }}
+      .hero {{ padding: 40px 0 32px; }}
+      .section-block {{ margin-top: 40px; }}
+      .panel {{ padding: 20px; }}
+      .section-heading {{ flex-direction: column; gap: 10px; }}
+      .score-pill {{ align-self: flex-start; }}
+      .score-total {{ padding: 16px 18px; }}
+      .score-total strong {{ font-size: 24px; }}
+      .score-table th, .score-table td {{ padding: 10px 8px; }}
     }}
-    @media (max-width: 960px) {{
-      .highlight-grid,
-      .metric-grid,
-      .roadmap-grid,
-      .finding-grid {{
-        grid-template-columns: 1fr;
-      }}
-      .topbar {{
-        align-items: flex-start;
-        flex-direction: column;
-      }}
+    @media (max-width: 480px) {{
+      main {{ padding: 12px 12px 56px; }}
+      .topbar {{ flex-direction: column; align-items: flex-start; }}
+      .hero {{ padding: 28px 0 24px; }}
+      h1 {{ font-size: 1.875rem; }}
     }}
   </style>
 </head>

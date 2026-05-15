@@ -561,86 +561,113 @@ def build_html_report(
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{html.escape(pack['title_prefix'])} - {html.escape(target_url)}</title>
   <style>
+    /* Ollama-inspired minimalist evidence view. Pure white, grayscale, system fonts,
+       binary radius (12px containers / 9999px pills), zero shadows, no chromatic color. */
     :root {{
       color-scheme: light;
-      --bg: #f6f1e8;
-      --panel: #fffdf9;
-      --ink: #1f1a17;
-      --muted: #6d635b;
-      --line: #d7ccc0;
-      --accent: #8d4f2a;
-      --accent-soft: #f2dfd0;
+      --bg: #ffffff;
+      --surface: #fafafa;
+      --ink: #000000;
+      --ink-near: #262626;
+      --muted: #525252;
+      --muted-soft: #737373;
+      --silver: #a3a3a3;
+      --line: #e5e5e5;
+      --radius-container: 12px;
+      --radius-pill: 9999px;
+      --font-display: "SF Pro Rounded", "SF Pro Display", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      --font-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
-      background: radial-gradient(circle at top, #fff6ee, var(--bg) 45%);
+      font-family: var(--font-body);
+      background: var(--bg);
       color: var(--ink);
+      font-size: 16px;
       line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }}
     main {{
-      max-width: 1120px;
+      max-width: 1080px;
       margin: 0 auto;
-      padding: 32px 20px 64px;
+      padding: 32px 24px 80px;
     }}
     h1, h2, h3 {{
-      font-family: "Avenir Next Condensed", "Arial Narrow", sans-serif;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-      margin: 0 0 12px;
+      font-family: var(--font-display);
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      margin: 0 0 16px;
+      overflow-wrap: anywhere;
     }}
-    h1 {{ font-size: 2.6rem; }}
-    h2 {{ font-size: 1.35rem; margin-top: 24px; }}
-    h3 {{ font-size: 1rem; margin-top: 16px; }}
-    p, li, td, th {{ font-size: 0.98rem; }}
+    h1 {{ font-size: clamp(2rem, 4vw, 2.75rem); line-height: 1; }}
+    h2 {{ font-size: clamp(1.5rem, 3vw, 1.75rem); margin-top: 40px; line-height: 1.11; }}
+    h3 {{ font-size: 1.125rem; margin-top: 20px; line-height: 1.2; }}
+    p, li, td, th {{ font-size: 15px; }}
     .lede {{
-      color: var(--muted);
+      color: var(--muted-soft);
       max-width: 72ch;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
     }}
     .grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
       gap: 16px;
     }}
     .panel {{
-      background: var(--panel);
+      background: var(--bg);
       border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 18px;
-      box-shadow: 0 10px 30px rgba(67, 36, 16, 0.08);
+      border-radius: var(--radius-container);
+      padding: 24px;
+      min-width: 0;
     }}
     .callout {{
-      background: var(--accent-soft);
-      border-left: 4px solid var(--accent);
-      padding: 14px 16px;
-      border-radius: 12px;
-      margin-top: 18px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      padding: 18px 20px;
+      border-radius: var(--radius-container);
+      margin-top: 24px;
     }}
     table {{
       width: 100%;
       border-collapse: collapse;
-      margin-top: 10px;
+      margin-top: 12px;
     }}
     th, td {{
       text-align: left;
-      padding: 9px 10px;
+      padding: 12px 10px;
       border-bottom: 1px solid var(--line);
       vertical-align: top;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }}
     th {{
-      color: var(--muted);
-      font-weight: 600;
+      color: var(--muted-soft);
+      font-weight: 500;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }}
+    tbody tr:last-child td {{ border-bottom: none; }}
     a {{
-      color: var(--accent);
+      color: var(--ink);
       text-decoration: none;
+      border-bottom: 1px solid var(--line);
     }}
+    a:hover {{ border-bottom-color: var(--ink); }}
     code {{
-      background: #f3ece4;
-      padding: 0.12rem 0.35rem;
+      font-family: var(--font-mono);
+      background: var(--surface);
+      padding: 2px 6px;
       border-radius: 6px;
+      font-size: 14px;
+    }}
+    @media (max-width: 768px) {{
+      main {{ padding: 24px 16px 56px; }}
+      h2 {{ margin-top: 32px; }}
+      .panel {{ padding: 20px; }}
     }}
   </style>
 </head>
