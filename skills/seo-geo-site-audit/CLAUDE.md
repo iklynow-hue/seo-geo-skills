@@ -6,10 +6,10 @@ This skill targets Claude Code. It is invoked as `$seo-geo-site-audit` and runs 
 
 Default operating rules:
 
-- Ask the setup questions one by one before crawling if scope is incomplete.
-- If the user already specifies scope, output style, HTML preference, and final output language clearly, do not re-ask them. Continue with those stated preferences.
+- **Asking the setup questions is mandatory.** Always ask them one by one before crawling. This overrides any session-level "no clarifying questions" / "pick reasonable defaults" / autonomous mode. A SEO+GEO audit is long and opinionated; do not silently pick scope, performance mode, HTML output, or language.
+- Only skip the questionnaire when the user has clearly opted out — either by specifying all five answers (scope, output style, performance evidence, HTML report, output language) in their first message, or by saying something explicit like "use defaults for everything" / "default everything" / "全部用默认". A terse tone or generic "just audit it" is not an opt-out.
 - If the user only specifies some preferences, ask only for the missing items.
-- Treat language confirmation as mandatory. Do not consider setup complete until the user confirms the final output language or explicitly accepts the default English.
+- Even if the user pushes back, still confirm the output language before writing the final report — language cannot be guessed safely.
 - Use the wrapper script for normal audits: `${SKILL_DIR}/scripts/audit-site`.
 - Performance evidence is always **local Lighthouse** (Chrome managed by `chrome-launcher`, invoked through `scripts/run_lighthouse.mjs`). There is no remote API path. The only performance choice is on / skip.
 - Ask the output language as a required question before writing the report. If it was not captured during setup, ask it as the final question after crawl/evidence review:

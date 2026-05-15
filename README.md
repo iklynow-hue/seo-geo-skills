@@ -88,7 +88,22 @@ Claude will pick up the `seo-geo-site-audit` skill from `~/.claude/skills/` and 
 4. HTML report on / off
 5. Final output language
 
-If you already know what you want, put it all in the first message and it skips the questionnaire.
+### These five questions are mandatory
+
+The skill **always** asks them, even in sessions where you've told Claude to skip clarifying questions or operate autonomously. SEO/GEO audits are long and opinionated, so the skill refuses to silently pick scope, performance, HTML, or output language for you.
+
+You can skip the questionnaire in two ways:
+
+- **Answer all five upfront**, e.g.
+  ```
+  Audit https://example.com — 50 pages, Operator output, local Lighthouse on, HTML report on, output in Chinese.
+  ```
+- **Explicitly opt in to defaults**, e.g.
+  ```
+  Audit https://example.com, use defaults for everything.
+  ```
+
+Any other phrasing ("just go", "be quick", "stop asking") will still trigger the questions, by design.
 
 Current implementation limits to know up front:
 
@@ -348,7 +363,22 @@ Claude 会从 `~/.claude/skills/` 找到 `seo-geo-site-audit` skill，并按顺�
 4. 是否要 HTML 报告
 5. 最终输出语言
 
-如果第一句话里已经把这些都写清楚，会跳过问询直接开始。
+### 这五个问题是强制的
+
+skill **始终**会问这五个问题，即使你在当前会话里已经让 Claude "不要再追问 / autonomous / 直接做" 也一样。SEO/GEO 审核又长又主观，skill 故意不允许它默默替你决定范围、性能、HTML、语言。
+
+只有两种方式可以跳过问询：
+
+- **首句一次性把五个答案给齐**，例如
+  ```
+  审核 https://example.com —— 50 页，Operator 风格，本地 Lighthouse 开，HTML 报告开，中文输出。
+  ```
+- **明确说明用默认**，例如
+  ```
+  审核 https://example.com，全部用默认。
+  ```
+
+其他口吻（"直接做"、"快点"、"别问了"）依然会触发问题，这是有意为之。
 
 当前实现的几个限制，建议先了解：
 

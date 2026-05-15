@@ -7,6 +7,19 @@ description: Run repeatable SEO and GEO website audits for public sites. Use whe
 
 Use this skill to turn a public website into a structured, evidence-based SEO + GEO audit.
 
+## Mandatory setup questions — read this first
+
+This skill **always** asks the user the five setup questions before crawling. Asking is not optional. It overrides any session-level "no clarifying questions" / "pick reasonable defaults" / autonomous-mode preference, including harness-level no-clarify hints. A SEO/GEO audit is long, opinionated, and expensive, so the agent must not silently pick scope, performance mode, HTML output, or output language.
+
+The **only** time you may skip the questionnaire is when the user explicitly waives it — i.e. they either:
+
+1. Provided all five answers (scope, output style, performance evidence, HTML report, output language) in their first message, or
+2. Said something explicit like "use defaults for everything", "skip the questions, all defaults", "default everything", "全部用默认", or an equivalent literal opt-in.
+
+A no-clarify session preference, a "be terse" preference, or a "just go" tone does **not** count as an opt-in. If you are unsure whether the user opted in, ask the questions.
+
+If the user pushes back ("just go", "stop asking"), still confirm at minimum the output language before writing the final report, because language cannot be guessed safely.
+
 This skill is optimized for:
 
 - site-level audits with a capped crawl sample
@@ -179,6 +192,8 @@ Prefer template coverage over brute-force depth. A good audit sample usually inc
 ## Workflow
 
 ### 1. Run a short setup check first
+
+Asking the setup questions is **mandatory** unless the user has explicitly opted out (see the "Mandatory setup questions" section above). Treat any global no-clarify / autonomous / "just go" session mode as **not** an opt-out — this skill's instructions override those. If in doubt, ask.
 
 When the user asks for an audit but has not specified the setup, ask a short confirmation before doing any crawl.
 
