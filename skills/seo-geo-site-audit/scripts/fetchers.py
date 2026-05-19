@@ -295,7 +295,7 @@ def install_agent_browser() -> bool:
     return True
 
 
-def check_prerequisites(auto_install: bool = True) -> dict[str, dict[str, Any]]:
+def check_prerequisites(auto_install: bool = False) -> dict[str, dict[str, Any]]:
     """Detect and optionally auto-install prerequisites.
 
     Returns a dict like:
@@ -869,11 +869,11 @@ def main() -> int:
     parser.add_argument("url", help="URL to fetch")
     parser.add_argument("--fetcher", default="auto", choices=["auto", "scrapling", "lightpanda", "agent_browser", "chrome", "urllib"])
     parser.add_argument("--check-prereqs", action="store_true", help="Only check prerequisites")
-    parser.add_argument("--no-auto-install", action="store_true", help="Don't auto-install missing prerequisites")
+    parser.add_argument("--auto-install", action="store_true", help="Auto-install missing prerequisites (network installs of pip/npm/curl-fetched binaries)")
     args = parser.parse_args()
 
     if args.check_prereqs:
-        status = check_prerequisites(auto_install=not args.no_auto_install)
+        status = check_prerequisites(auto_install=args.auto_install)
         print_prereq_summary(status)
         return 0
 
