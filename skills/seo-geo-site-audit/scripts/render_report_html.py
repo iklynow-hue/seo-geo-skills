@@ -229,7 +229,7 @@ def render_score_table(rows: list[dict], ui: dict[str, str], empty_label: str) -
             f"<td>{html.escape(str(row.get('score', '')))}</td>"
             f"<td>{html.escape(format_weight(row.get('weight', '')))}</td>"
             f"<td>{html.escape(f'{weighted_value:g}' if weighted_value is not None else '')}</td>"
-            f"<td>{html.escape(str(row.get('notes', row.get('note', ''))))}</td>"
+            f"<td>{sanitize_prose(row.get('notes', row.get('note', '')))}</td>"
             "</tr>"
         )
     weighted_total = compute_weighted_total(rows)
@@ -276,8 +276,8 @@ def render_performance_column(block: dict, heading: str, ui: dict[str, str], emp
         "<article class='metric-card panel'>"
         f"<h3>{html.escape(heading)}</h3>"
         "<dl class='metric-list'>"
-        f"<div><dt>{html.escape(ui['average_performance'])}</dt><dd>{html.escape(str(block.get('average_performance', '')))}</dd></div>"
-        f"<div><dt>{html.escape(ui['pattern'])}</dt><dd>{html.escape(str(block.get('pattern', '')))}</dd></div>"
+        f"<div><dt>{html.escape(ui['average_performance'])}</dt><dd>{sanitize_prose(block.get('average_performance', ''))}</dd></div>"
+        f"<div><dt>{html.escape(ui['pattern'])}</dt><dd>{sanitize_prose(block.get('pattern', ''))}</dd></div>"
         "</dl>"
         f"<div class='metric-subtitle'>{html.escape(ui['largest_issues'])}</div>"
         f"{render_list([str(item) for item in largest_issues], empty_label)}"
