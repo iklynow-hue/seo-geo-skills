@@ -41,12 +41,25 @@ def severity_class(value: str) -> str:
 
 
 def render_list(items: list[str], empty_label: str) -> str:
+    """Render a list of prose strings.
+
+    The payload is agent-authored, not user input, so inline HTML in items
+    (e.g. <strong>, <code>) is treated as content, not escaped. The renderer
+    only escapes user-untrusted fields like target_url, headers, and snapshot
+    label/value pairs.
+    """
     if not items:
         return f"<p class='empty'>{html.escape(empty_label)}</p>"
-    return "<ul>" + "".join(f"<li>{html.escape(item)}</li>" for item in items) + "</ul>"
+    return "<ul>" + "".join(f"<li>{item}</li>" for item in items) + "</ul>"
 
 
 def render_issue_items(items: list[object], empty_label: str) -> str:
+    """Render an issue list. Each item is a dict with severity + title + detail
+    (canonical schema, see references/report-payload-template.json), or a
+    legacy {severity, description, affected} shape kept for backwards
+    compatibility. Prose fields pass through as HTML; severity badge is
+    escaped because it comes from a small enum.
+    """
     if not items:
         return f"<p class='empty'>{html.escape(empty_label)}</p>"
     rendered = []
@@ -55,13 +68,28 @@ def render_issue_items(items: list[object], empty_label: str) -> str:
             severity = str(item.get("severity", "")).upper()
             title = str(item.get("title", "")).strip()
             detail = str(item.get("detail", "")).strip()
+            # Backwards compat: older payloads used description / affected
+            if not title and not detail:
+                description = str(item.get("description", "")).strip()
+                affected = str(item.get("affected", "")).strip()
+                if description:
+                    detail = description
+                    if affected:
+                        detail = f"{detail}<br><small>Affected: {affected}</small>"
             if severity or title or detail:
                 badge = f"<span class='severity {severity_class(severity)}'>{html.escape(severity or 'Issue')}</span>"
-                headline = html.escape(title or detail or severity or "Issue")
-                body = f"<p>{html.escape(detail)}</p>" if detail and detail != title else ""
+                # If a title is set, use it as the headline and detail as the body.
+                # If only detail is set, render it as the headline alone (no body)
+                # so the same prose doesn't appear twice.
+                if title:
+                    headline = title
+                    body = f"<p>{detail}</p>" if detail else ""
+                else:
+                    headline = detail or severity or "Issue"
+                    body = ""
                 rendered.append(f"<li class='issue-item'>{badge}<div><strong>{headline}</strong>{body}</div></li>")
             continue
-        rendered.append(f"<li>{html.escape(str(item))}</li>")
+        rendered.append(f"<li>{item}</li>")
     return "<ul class='issues-list'>" + "".join(rendered) + "</ul>"
 
 
