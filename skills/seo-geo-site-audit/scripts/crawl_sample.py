@@ -862,8 +862,13 @@ def discover_sitemap_urls(start_url: str, user_agent: str) -> dict:
         parsed_robots = parse_robots(robots_resp["text"])
         robots_info["sitemaps"] = parsed_robots["sitemaps"]
         robots_info["ai_crawler_directives"] = parsed_robots["ai_crawler_directives"]
-    except Exception:
-        pass
+    except urllib.error.HTTPError as exc:
+        # 4xx/5xx — record the status so downstream knows robots is present-but-bad
+        robots_info["status"] = exc.code
+        print(f"[robots] HTTP {exc.code} fetching {robots_url}", file=sys.stderr)
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+        # Network/timeout/scheme — robots absent or unreachable, audit continues
+        print(f"[robots] fetch failed for {robots_url}: {type(exc).__name__}: {exc}", file=sys.stderr)
 
     to_visit = deque(robots_info["sitemaps"] or [urllib.parse.urljoin(site_root, "/sitemap.xml")])
     seen = set()
@@ -876,7 +881,8 @@ def discover_sitemap_urls(start_url: str, user_agent: str) -> dict:
         sitemap_count += 1
         try:
             resp = fetch(sitemap_url, user_agent)
-        except Exception:
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+            print(f"[sitemap] fetch failed for {sitemap_url}: {type(exc).__name__}: {exc}", file=sys.stderr)
             continue
         if resp["status"] != 200:
             continue
@@ -904,7 +910,7 @@ def check_llms(site_url: str, user_agent: str) -> dict:
     for candidate in candidates:
         try:
             resp = _fetch_urllib_raw(candidate, user_agent)
-        except Exception:
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError, ValueError):
             continue
         preview = "\n".join(resp["text"].splitlines()[:8])
         stripped = resp["text"].strip().lower()

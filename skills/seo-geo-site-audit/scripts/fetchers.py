@@ -163,7 +163,8 @@ def extract_dom_links_via_agent_browser(timeout: int = 15, auto_connect: bool = 
         except (json.JSONDecodeError, TypeError):
             pass
         return empty
-    except Exception:
+    except (subprocess.SubprocessError, OSError) as exc:
+        print(f"[dom-extract] agent-browser eval failed: {exc}", file=sys.stderr)
         return empty
 
 
@@ -183,7 +184,8 @@ def scroll_and_wait(wait_ms: int = 3000, timeout: int = 15, auto_connect: bool =
         )
         time.sleep(wait_ms / 1000)
         return True
-    except Exception:
+    except (subprocess.SubprocessError, OSError) as exc:
+        print(f"[scroll-and-wait] agent-browser scroll failed: {exc}", file=sys.stderr)
         return False
 
 
@@ -208,7 +210,7 @@ def is_scrapling_browser_installed() -> bool:
     try:
         result = _run([sys.executable, "-m", "scrapling", "status"], timeout=15)
         return result.returncode == 0
-    except Exception:
+    except (subprocess.SubprocessError, OSError):
         return False
 
 
@@ -774,8 +776,8 @@ def fetch_with_spa_recovery(
                     result = scrapling_result
                     words = s_words
                     scripts = s_scripts
-        except Exception:
-            pass
+        except (subprocess.SubprocessError, OSError, RuntimeError) as exc:
+            print(f"[recovery] Scrapling retry failed: {exc}", file=sys.stderr)
 
     # Recovery strategy 2: agent-browser with scroll + wait
     if shutil.which("agent-browser"):
