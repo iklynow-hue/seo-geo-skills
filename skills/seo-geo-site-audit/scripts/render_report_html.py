@@ -274,7 +274,7 @@ def build_html(payload: dict) -> str:
         issues_count = f"<span class='count'>{len(issues)}</span>" if issues else ""
         actions_count = f"<span class='count'>{len(actions)}</span>" if actions else ""
         rendered_sections.append(
-            "<section class='finding-section panel' id='{id}'>"
+            f"<section class='finding-section panel' id='{section_id}'>"
             "<div class='section-heading'>"
             "<div>"
             f"<div class='section-kicker'>{html.escape(ui['section_findings'])}</div>"
@@ -297,7 +297,7 @@ def build_html(payload: dict) -> str:
             "</article>"
             "</div>"
             "</section>"
-        .format(id=section_id))
+        )
 
     return f"""<!doctype html>
 <html lang="{html.escape(language)}">
