@@ -409,10 +409,6 @@ def dedupe_urls(urls: list[str]) -> list[str]:
     return list(dict.fromkeys(urls))
 
 
-def queue_has_url(queue: deque, url: str) -> bool:
-    return any(item[0] == url for item in queue)
-
-
 def _empty_page(
     url: str,
     discovery_source: str,
@@ -1377,6 +1373,12 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
     sitemap_candidates = interleave_by_template(robots_bundle["urls"], start_url, max(max_pages * 2, max_pages))
 
     queue = deque([(start_url, "start"), *[(url, "sitemap") for url in sitemap_candidates]])
+    queued: set[str] = {item[0] for item in queue}
+
+    def enqueue(url: str, source: str) -> None:
+        queue.append((url, source))
+        queued.add(url)
+
     seen = set()
     pages = []
     bfs_discovered = 0
@@ -1429,12 +1431,12 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
             domain_type = detect_site_domain_type(start_url, page.get("title", "") + " " + page.get("meta_description", ""))
 
         for link in discovered_links.get("raw_a_href", []):
-            if link not in seen and not queue_has_url(queue, link):
-                queue.append((link, "raw_a_href"))
+            if link not in seen and link not in queued:
+                enqueue(link, "raw_a_href")
                 bfs_discovered += 1
         for link in discovered_links.get("rendered_a_href", []):
-            if link not in seen and not queue_has_url(queue, link):
-                queue.append((link, "rendered_a_href"))
+            if link not in seen and link not in queued:
+                enqueue(link, "rendered_a_href")
                 rendered_discovered += 1
 
         # Browser escalation: relax condition — trigger for any browser-backed fetcher
@@ -1470,12 +1472,12 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
                     page = chrome_page
                     discovered_links = chrome_links
                     for link in discovered_links.get("raw_a_href", []):
-                        if link not in seen and not queue_has_url(queue, link):
-                            queue.append((link, "raw_a_href"))
+                        if link not in seen and link not in queued:
+                            enqueue(link, "raw_a_href")
                             bfs_discovered += 1
                     for link in discovered_links.get("rendered_a_href", []):
-                        if link not in seen and not queue_has_url(queue, link):
-                            queue.append((link, "rendered_a_href"))
+                        if link not in seen and link not in queued:
+                            enqueue(link, "rendered_a_href")
                             rendered_discovered += 1
             except Exception:
                 pass
@@ -1490,8 +1492,8 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
         )
         if browser_backed_fetch and has_rendered_content and stalled_discovery:
             for link in discovered_links.get("dom_route_hint", []):
-                if link not in seen and not queue_has_url(queue, link):
-                    queue.append((link, "dom_route_hint"))
+                if link not in seen and link not in queued:
+                    enqueue(link, "dom_route_hint")
                     dom_route_hints_enqueued += 1
             # Use larger limit when domain-specific routes are available
             guess_limit = max(4, min(max_pages * 3, 12))
@@ -1502,8 +1504,8 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
                 best_effort_route_guessing_used = True
                 route_guess_candidates_considered += len(guesses)
                 for guess in guesses:
-                    if guess not in seen and not queue_has_url(queue, guess):
-                        queue.append((guess, "route_guess"))
+                    if guess not in seen and guess not in queued:
+                        enqueue(guess, "route_guess")
                         route_guess_pages_enqueued += 1
 
     # Sitemap-first fallback: if BFS + route guessing produced too few pages,
@@ -1532,12 +1534,12 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
                 )
                 pages.append(page)
                 for link in discovered_links.get("raw_a_href", []):
-                    if link not in seen and not queue_has_url(queue, link):
-                        queue.append((link, "raw_a_href"))
+                    if link not in seen and link not in queued:
+                        enqueue(link, "raw_a_href")
                         bfs_discovered += 1
                 for link in discovered_links.get("rendered_a_href", []):
-                    if link not in seen and not queue_has_url(queue, link):
-                        queue.append((link, "rendered_a_href"))
+                    if link not in seen and link not in queued:
+                        enqueue(link, "rendered_a_href")
                         rendered_discovered += 1
             except Exception:
                 continue
