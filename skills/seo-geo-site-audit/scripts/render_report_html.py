@@ -259,7 +259,9 @@ def build_html(payload: dict) -> str:
     title = str(payload.get("title", "SEO + GEO Audit Report"))
     display_title = str(payload.get("display_title", title))
     target_url = str(payload.get("target_url", ""))
-    repo_url = str(payload.get("repo_url", "")).strip()
+    # Default repo attribution. Forks can override via payload.repo_url /
+    # payload.repo_label to point at their own fork.
+    repo_url = str(payload.get("repo_url", "https://github.com/iklynow-hue/seo-geo-skills")).strip()
     repo_label = str(payload.get("repo_label", "SEO GEO Skills")).strip()
     generated_at = str(payload.get("generated_at", datetime.now(timezone.utc).replace(microsecond=0).isoformat()))
     snapshot = prepare_snapshot(payload.get("snapshot", []))
@@ -315,7 +317,6 @@ def build_html(payload: dict) -> str:
         rendered_sections.append(
             f"<section class='finding-section panel' id='{section_id}'>"
             "<div class='section-heading'>"
-            f"<div class='score-pill'>{html.escape(str(section.get('score', '')))}</div>"
             f"<h2>{html.escape(section_title)}</h2>"
             "</div>"
             f"{issues_block}"
@@ -894,7 +895,7 @@ def build_html(payload: dict) -> str:
         <h1><span class="report-prefix">{html.escape(ui['report_for'])}</span> <span class="report-domain">{html.escape(report_subject or display_title)}</span></h1>
         <div class="hero-meta">
           <span class="meta-chip">{html.escape(ui['generated_at'])}: {html.escape(display_generated_at)}</span>
-          {f"<span class='meta-chip'><a href='{html.escape(repo_url)}'>{html.escape(repo_label)}</a></span>" if repo_url else ""}
+          {f"<span class='meta-chip'>{html.escape(ui.get('powered_by_prefix', 'Powered by'))} <a href='{html.escape(repo_url)}' target='_blank' rel='noopener'>{html.escape(repo_label)}</a></span>" if repo_url else ""}
         </div>
       </div>
     </section>
