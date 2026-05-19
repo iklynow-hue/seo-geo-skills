@@ -56,12 +56,6 @@ cd skills/seo-geo-site-audit/scripts && npm install
 
 ## Use it
 
-In chat:
-
-- `Conduct an SEO and GEO audit for https://example.com`
-- `Audit this site for AI visibility: https://example.com`
-- `Run a 50-page audit for https://example.com, generate the HTML report, output in Chinese`
-
 The skill runs immediately on the URL. No setup questions. Defaults:
 
 | Setting | Default |
@@ -72,15 +66,18 @@ The skill runs immediately on the URL. No setup questions. Defaults:
 | HTML report | On |
 | Output language | English |
 
-### Override inline
+### Example prompts
 
-Just say what you want in the prompt:
-
-- `Run a 50-page audit for https://example.com in Chinese` → template mode + Chinese report
-- `Quick check on https://example.com, skip Lighthouse` → fast mode (1 page) + perf off
-- `Audit https://example.com with specialist depth` → specialist style
-
-Or override via CLI flags when running the wrapper directly (see Terminal usage below).
+| You say | The skill does |
+|---|---|
+| `Audit https://example.com` | Defaults — light/10pp, Operator, Lighthouse on, HTML on, English |
+| `Conduct an SEO and GEO audit for https://example.com` | Same as above (any audit-like phrasing triggers the skill) |
+| `Audit https://example.com for AI visibility` | Same as above |
+| `Quick check on https://example.com, skip Lighthouse` | Fast mode (1 page) + `--skip-pagespeed` |
+| `Run a 50-page audit for https://example.com, output in Chinese` | Template mode (50 pages) + Chinese report |
+| `Audit https://example.com with specialist depth` | Specialist output style |
+| `审核 https://example.com 50 页 用中文` | Template mode + Chinese report |
+| `Audit my site` (no URL) | Skill asks for the URL — the one hard requirement |
 
 ### The agent only asks when
 
@@ -88,7 +85,7 @@ Or override via CLI flags when running the wrapper directly (see Terminal usage 
 - The user wrote the request in a non-English language without specifying the report language (single confirmation: "Report in English or <other>?").
 - An auto-install of optional fetchers would download network binaries — consent is required.
 
-The report language defaults to **English** even when the prompt is in another language. Switch only on explicit "in `<language>`" phrasing or the `--report-language` flag.
+The report language defaults to **English** even when the prompt is in another language. Switch only on explicit "in `<language>`" / "用中文" phrasing or the `--report-language` flag.
 
 ### Limits to know
 
@@ -233,12 +230,6 @@ cd skills/seo-geo-site-audit/scripts && npm install
 
 ## 使用
 
-聊天里直接说：
-
-- `帮我对 https://example.com 做一次 SEO 和 GEO 审核`
-- `帮我审核这个站点的 AI 可见性: https://example.com`
-- `跑一次 50 页的审核 https://example.com，输出 HTML 报告，结果用中文`
-
 收到 URL 后 skill 直接开跑，不再追问 5 个问题。默认值：
 
 | 项 | 默认 |
@@ -249,15 +240,18 @@ cd skills/seo-geo-site-audit/scripts && npm install
 | HTML 报告 | 开 |
 | 输出语言 | English |
 
-### 在原句里就能改
+### 示例
 
-直接在请求里说想要什么：
-
-- `审核 https://example.com，跑 50 页，用中文输出` → template + 中文报告
-- `快速检查 https://example.com，跳过 Lighthouse` → fast + 跳过性能
-- `深度审核 https://example.com，专家风格` → specialist 风格
-
-也可以在终端直接给 CLI flags（见下方"终端使用"）。
+| 你说 | skill 实际行为 |
+|---|---|
+| `Audit https://example.com` | 全部默认 — light/10 页, Operator, Lighthouse 开, HTML 开, 英文 |
+| `帮我对 https://example.com 做一次 SEO 和 GEO 审核` | 同上（任何"审核"类措辞都会触发） |
+| `帮我审核这个站点的 AI 可见性: https://example.com` | 同上 |
+| `审核 https://example.com，跑 50 页，用中文输出` | Template (50 页) + 中文报告 |
+| `快速检查 https://example.com，跳过 Lighthouse` | Fast (1 页) + `--skip-pagespeed` |
+| `深度审核 https://example.com，专家风格` | Specialist 输出风格 |
+| `审核 https://example.com 50 页 用中文` | Template + 中文报告（更短的写法） |
+| `帮我审核我的站点`（没给 URL） | 反问 URL — 唯一硬性要求 |
 
 ### 只在以下三种情况才会问
 
@@ -265,7 +259,7 @@ cd skills/seo-geo-site-audit/scripts && npm install
 - 请求用非英文写但没说"用 X 语言输出"——只确认一次："输出用 English 还是 <其他>？"
 - 自动安装可选爬虫工具时（要联网下载 Lightpanda 等），先确认。
 
-报告默认 **English**，即使你的请求是中文写的也一样。只有显式说"用中文"或加 `--report-language` flag 才切换。
+报告默认 **English**，即使你的请求是中文写的也一样。只有显式说"用中文"/"in Chinese"或加 `--report-language` flag 才切换。
 
 ### 已知限制
 
