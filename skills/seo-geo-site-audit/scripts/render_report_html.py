@@ -78,6 +78,10 @@ def render_issue_items(items: list[object], empty_label: str) -> str:
                         detail = f"{detail}<br><small>Affected: {affected}</small>"
             if severity or title or detail:
                 sev_class = severity_class(severity)
+                # Separate class namespace for the LI stripe so it doesn't
+                # collide with the global .sev-pX background rule used by the
+                # badge span (which would otherwise paint the entire card).
+                tier_class = sev_class.replace("sev-", "tier-") if sev_class.startswith("sev-") else "tier-generic"
                 badge = f"<span class='severity {sev_class}'>{html.escape(severity or 'Issue')}</span>"
                 if title:
                     headline = title
@@ -86,7 +90,7 @@ def render_issue_items(items: list[object], empty_label: str) -> str:
                     headline = detail or severity or "Issue"
                     body = ""
                 rendered.append(
-                    f"<li class='issue-item {sev_class}'>"
+                    f"<li class='issue-item {tier_class}'>"
                     "<div class='issue-body'>"
                     f"<span class='issue-meta'>{badge}</span>"
                     f"<span class='issue-title'>{headline}</span>"
@@ -633,10 +637,10 @@ def build_html(payload: dict) -> str:
       align-self: stretch;
       border-radius: 2px 0 0 2px;
     }}
-    .issue-item.sev-p0::before {{ background: var(--ink); }}
-    .issue-item.sev-p1::before {{ background: var(--ink-button); }}
-    .issue-item.sev-p2::before {{ background: var(--muted-soft); }}
-    .issue-item.sev-p3::before {{ background: var(--line-dark); }}
+    .issue-item.tier-p0::before {{ background: var(--ink); }}
+    .issue-item.tier-p1::before {{ background: var(--ink-button); }}
+    .issue-item.tier-p2::before {{ background: var(--muted-soft); }}
+    .issue-item.tier-p3::before {{ background: var(--line-dark); }}
     .issue-body {{ min-width: 0; padding: 4px 0; }}
     .issue-meta {{
       display: inline-flex;
@@ -812,32 +816,50 @@ def build_html(payload: dict) -> str:
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }}
+    /* Roadmap: stacked rows, label on the left, items expanding to the right.
+       Same single-reading-column principle as the section findings — no 4-up
+       grid that forces the reviewer to scan side to side. */
     .roadmap-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
-      gap: 14px;
+      gap: 12px;
+      max-width: 820px;
     }}
     .roadmap-column {{
-      padding: 20px;
+      display: grid;
+      grid-template-columns: 80px minmax(0, 1fr);
+      gap: 20px;
+      padding: 18px 20px;
       border-radius: var(--radius-container);
-      background: var(--surface);
+      background: var(--bg);
       border: 1px solid var(--line);
       min-width: 0;
+      align-items: start;
     }}
     .roadmap-column h3 {{
-      margin: 0 0 14px;
+      margin: 0;
       font-family: var(--font-display);
-      font-size: 18px;
+      font-size: 13px;
       font-weight: 500;
-      letter-spacing: -0.01em;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      align-self: start;
+      padding: 4px 12px;
+      border-radius: var(--radius-pill);
+      text-align: center;
+      justify-self: start;
     }}
-    /* Roadmap priority shading stays grayscale; rank is conveyed by tint depth */
-    .roadmap-p0 {{ background: var(--ink); color: var(--bg); border-color: var(--ink); }}
-    .roadmap-p0 h3, .roadmap-p0 li {{ color: var(--bg); }}
-    .roadmap-p1 {{ background: var(--ink-button); color: var(--bg); border-color: var(--ink-button); }}
-    .roadmap-p1 h3, .roadmap-p1 li {{ color: var(--bg); }}
-    .roadmap-p2 {{ background: var(--surface); }}
-    .roadmap-p3 {{ background: var(--bg); }}
+    .roadmap-column ul {{
+      margin: 0;
+      padding-left: 20px;
+      line-height: 1.55;
+    }}
+    .roadmap-column li {{ font-size: 14.5px; }}
+    .roadmap-column li + li {{ margin-top: 8px; }}
+    /* Priority rank conveyed by the badge tint only — body stays white for readability */
+    .roadmap-p0 h3 {{ background: var(--ink); color: var(--bg); }}
+    .roadmap-p1 h3 {{ background: var(--ink-button); color: var(--bg); }}
+    .roadmap-p2 h3 {{ background: var(--line); color: var(--ink-near); }}
+    .roadmap-p3 h3 {{ background: var(--bg); color: var(--muted); border: 1px solid var(--line); }}
 
     .empty {{ color: var(--silver); font-style: normal; margin: 0; }}
     footer {{
