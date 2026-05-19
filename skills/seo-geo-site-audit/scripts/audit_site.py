@@ -162,13 +162,14 @@ def build_final_report_seed(
     language = normalize_report_language(report_language)
     if language == "zh":
         title = "SEO + GEO 审核报告"
+        if pagespeed_provider:
+            perf_check_zh = "首页（移动 + 桌面）"
+        else:
+            perf_check_zh = "未收集"
         snapshot = [
-            {"label": "目标", "value": urlsplit(target_url).netloc or target_url},
-            {"label": "模式", "value": label_mode(mode, max_pages, report_language)},
-            {"label": "输出风格", "value": label_output_style(output_style, report_language)},
-            {"label": "置信度", "value": "待填写"},
+            {"label": "域名", "value": urlsplit(target_url).netloc or target_url},
             {"label": "已采样页面", "value": str(page_count)},
-            {"label": "性能证据", "value": pagespeed_provider_label_zh},
+            {"label": "性能检查", "value": perf_check_zh},
         ]
         intro = "请用最终输出语言写一句执行摘要，并补全下方各部分。"
         overall = {
@@ -201,13 +202,14 @@ def build_final_report_seed(
             )
     else:
         title = "SEO + GEO Audit Report"
+        if pagespeed_provider:
+            perf_check_en = "Homepage (mobile + desktop)"
+        else:
+            perf_check_en = "Skipped"
         snapshot = [
-            {"label": "Target", "value": urlsplit(target_url).netloc or target_url},
-            {"label": "Mode", "value": label_mode(mode, max_pages, report_language)},
-            {"label": "Output style", "value": label_output_style(output_style, report_language)},
-            {"label": "Confidence", "value": "Fill after scoring"},
+            {"label": "Domain", "value": urlsplit(target_url).netloc or target_url},
             {"label": "Pages sampled", "value": str(page_count)},
-            {"label": "Performance evidence", "value": pagespeed_provider_label},
+            {"label": "Performance check", "value": perf_check_en},
         ]
         intro = "Replace this with a one-line executive framing in the final output language and then complete every section below."
         overall = {

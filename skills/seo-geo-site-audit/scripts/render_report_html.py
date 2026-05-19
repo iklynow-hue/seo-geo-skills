@@ -119,42 +119,10 @@ def render_snapshot(snapshot: list[dict], empty_label: str) -> str:
     return "<div class='snapshot-grid'>" + "".join(cards) + "</div>"
 
 
-def snapshot_label_key(label: str) -> str:
-    normalized = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "", label.strip().lower())
-    mapping = {
-        "target": "target",
-        "目标": "target",
-        "mode": "mode",
-        "模式": "mode",
-        "pagessampled": "pages_sampled",
-        "已采样页面": "pages_sampled",
-        "performanceevidence": "performance_evidence",
-        "性能证据": "performance_evidence",
-        "outputstyle": "output_style",
-        "输出风格": "output_style",
-        "confidence": "confidence",
-        "置信度": "confidence",
-    }
-    return mapping.get(normalized, normalized)
-
-
 def prepare_snapshot(snapshot: list[dict]) -> list[dict]:
-    by_key: dict[str, dict] = {}
-    ordered_unknown: list[dict] = []
-    for item in snapshot:
-        key = snapshot_label_key(str(item.get("label", "")))
-        if key in {"output_style", "confidence"}:
-            continue
-        if key in {"target", "mode", "pages_sampled", "performance_evidence"}:
-            by_key[key] = item
-        else:
-            ordered_unknown.append(item)
-    ordered = []
-    for key in ("target", "mode", "pages_sampled", "performance_evidence"):
-        if key in by_key:
-            ordered.append(by_key[key])
-    ordered.extend(ordered_unknown)
-    return ordered
+    """Pass-through. Payload order is authoritative — the seed JSON authors
+    the canonical Domain → Pages sampled → Performance check sequence."""
+    return [item for item in snapshot if item]
 
 
 def parse_number(value: object) -> float | None:
@@ -243,6 +211,13 @@ def render_score_table(rows: list[dict], ui: dict[str, str], empty_label: str) -
     return (
         "<div class='scorecard-wrap'>"
         "<table class='score-table'>"
+        "<colgroup>"
+        "<col class='col-section'>"
+        "<col class='col-score'>"
+        "<col class='col-weight'>"
+        "<col class='col-contrib'>"
+        "<col class='col-notes'>"
+        "</colgroup>"
         "<thead><tr>"
         f"<th>{html.escape(ui['section'])}</th>"
         f"<th>{html.escape(ui['score'])}</th>"
@@ -492,10 +467,18 @@ def build_html(payload: dict) -> str:
 
     /* --- Scorecard ---------------------------------------------------- */
     .scorecard-wrap {{ display: grid; gap: 20px; }}
-    .score-table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
+    .score-table {{ width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }}
+    /* Explicit column widths so the short numeric headers (Score / Weight /
+       Contribution) don't wrap onto multiple lines, and Notes gets the
+       remaining space. Totals to 100%. */
+    .score-table .col-section {{ width: 24%; }}
+    .score-table .col-score {{ width: 9%; }}
+    .score-table .col-weight {{ width: 10%; }}
+    .score-table .col-contrib {{ width: 16%; }}
+    .score-table .col-notes {{ width: 41%; }}
     .score-table th, .score-table td {{
       text-align: left;
-      padding: 14px 12px;
+      padding: 14px 10px;
       border-bottom: 1px solid var(--line);
       vertical-align: top;
       overflow-wrap: anywhere;
@@ -504,9 +487,10 @@ def build_html(payload: dict) -> str:
     .score-table thead th {{
       color: var(--muted-soft);
       font-weight: 500;
-      font-size: 12px;
+      font-size: 11px;
       letter-spacing: 0.04em;
       text-transform: uppercase;
+      white-space: normal;
     }}
     .score-table tbody tr:last-child td {{ border-bottom: none; }}
     .score-total {{
@@ -929,10 +913,6 @@ def build_html(payload: dict) -> str:
         <article class="highlight-card wins panel">
           <h3>{html.escape(ui['top_wins'])}</h3>
           {render_list(top_wins, ui['not_provided'])}
-        </article>
-        <article class="highlight-card issues panel">
-          <h3>{html.escape(ui['top_issues'])}</h3>
-          {render_list(top_issues, ui['not_provided'])}
         </article>
       </div>
     </section>
