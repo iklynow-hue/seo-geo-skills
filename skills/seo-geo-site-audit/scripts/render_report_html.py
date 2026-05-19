@@ -77,17 +77,23 @@ def render_issue_items(items: list[object], empty_label: str) -> str:
                     if affected:
                         detail = f"{detail}<br><small>Affected: {affected}</small>"
             if severity or title or detail:
-                badge = f"<span class='severity {severity_class(severity)}'>{html.escape(severity or 'Issue')}</span>"
-                # If a title is set, use it as the headline and detail as the body.
-                # If only detail is set, render it as the headline alone (no body)
-                # so the same prose doesn't appear twice.
+                sev_class = severity_class(severity)
+                badge = f"<span class='severity {sev_class}'>{html.escape(severity or 'Issue')}</span>"
                 if title:
                     headline = title
-                    body = f"<p>{detail}</p>" if detail else ""
+                    body = f"<p class='issue-detail'>{detail}</p>" if detail else ""
                 else:
                     headline = detail or severity or "Issue"
                     body = ""
-                rendered.append(f"<li class='issue-item'>{badge}<div><strong>{headline}</strong>{body}</div></li>")
+                rendered.append(
+                    f"<li class='issue-item {sev_class}'>"
+                    "<div class='issue-body'>"
+                    f"<span class='issue-meta'>{badge}</span>"
+                    f"<span class='issue-title'>{headline}</span>"
+                    f"{body}"
+                    "</div>"
+                    "</li>"
+                )
             continue
         rendered.append(f"<li>{item}</li>")
     return "<ul class='issues-list'>" + "".join(rendered) + "</ul>"
@@ -298,32 +304,52 @@ def build_html(payload: dict) -> str:
         passed = [str(item) for item in section.get("passed_items", [])]
         issues = section.get("issues", [])
         actions = [str(item) for item in section.get("recommended_actions", [])]
-        passed_count = f"<span class='count'>{len(passed)}</span>" if passed else ""
-        issues_count = f"<span class='count'>{len(issues)}</span>" if issues else ""
-        actions_count = f"<span class='count'>{len(actions)}</span>" if actions else ""
+        evidence = [str(item) for item in section.get("evidence", [])]
+        passed_count = len(passed)
+        issues_count = len(issues)
+        actions_count = len(actions)
+        evidence_count = len(evidence)
+        # Reading order: title + score, then issues (the work to do), then actions
+        # (what to do about it), then passed items + evidence collapsed at the
+        # bottom (supporting context, not the focus).
+        issues_block = (
+            "<div class='subsection'>"
+            f"<h3 class='block-heading'>{html.escape(ui['issues'])} <span class='count'>{issues_count}</span></h3>"
+            f"{render_issue_items(issues, ui['not_provided'])}"
+            "</div>"
+        ) if issues_count else ""
+        actions_block = (
+            "<div class='subsection'>"
+            f"<h3 class='block-heading'>{html.escape(ui['recommended_actions'])} <span class='count'>{actions_count}</span></h3>"
+            f"<ol class='action-list'>"
+            + "".join(f"<li>{item}</li>" for item in actions)
+            + "</ol>"
+            "</div>"
+        ) if actions_count else ""
+        passed_details = (
+            "<details class='supporting-details'>"
+            f"<summary>{html.escape(ui['passed_items'])} <span class='count'>{passed_count}</span></summary>"
+            f"{render_list(passed, ui['not_provided'])}"
+            "</details>"
+        ) if passed_count else ""
+        evidence_details = (
+            "<details class='supporting-details'>"
+            f"<summary>{html.escape(ui.get('evidence', 'Evidence'))} <span class='count'>{evidence_count}</span></summary>"
+            f"{render_list(evidence, ui['not_provided'])}"
+            "</details>"
+        ) if evidence_count else ""
+        supporting_block = (
+            f"<div class='supporting-row'>{passed_details}{evidence_details}</div>"
+        ) if (passed_count or evidence_count) else ""
         rendered_sections.append(
             f"<section class='finding-section panel' id='{section_id}'>"
             "<div class='section-heading'>"
-            "<div>"
-            f"<div class='section-kicker'>{html.escape(ui['section_findings'])}</div>"
+            f"<div class='score-pill'>{html.escape(str(section.get('score', '')))}</div>"
             f"<h2>{html.escape(section_title)}</h2>"
             "</div>"
-            f"<div class='score-pill'>{html.escape(str(section.get('score', '')))}</div>"
-            "</div>"
-            "<div class='finding-grid'>"
-            "<article class='finding-block'>"
-            f"<h3>{html.escape(ui['passed_items'])}{passed_count}</h3>"
-            f"{render_list(passed, ui['not_provided'])}"
-            "</article>"
-            "<article class='finding-block issues-block'>"
-            f"<h3>{html.escape(ui['issues'])}{issues_count}</h3>"
-            f"{render_issue_items(issues, ui['not_provided'])}"
-            "</article>"
-            "<article class='finding-block'>"
-            f"<h3>{html.escape(ui['recommended_actions'])}{actions_count}</h3>"
-            f"{render_list(actions, ui['not_provided'])}"
-            "</article>"
-            "</div>"
+            f"{issues_block}"
+            f"{actions_block}"
+            f"{supporting_block}"
             "</section>"
         )
 
@@ -514,8 +540,7 @@ def build_html(payload: dict) -> str:
       margin-top: 24px;
     }}
     .highlight-card h3,
-    .metric-card h3,
-    .finding-block h3 {{
+    .metric-card h3 {{
       margin: 0 0 14px;
       font-family: var(--font-display);
       font-size: 18px;
@@ -525,21 +550,22 @@ def build_html(payload: dict) -> str:
     }}
 
     /* --- Section findings -------------------------------------------- */
-    .finding-section {{ margin-top: 24px; }}
+    /* Single reading column per section. Top-down flow:
+         Heading + score → Issues (the work) → Actions (the fix) →
+         supporting details (passed items + evidence) collapsed at bottom.
+       No three-up grid; no card-in-card chrome. */
+    .finding-section {{
+      margin-top: 24px;
+      padding: 32px 32px 28px;
+      max-width: 820px;
+    }}
     .section-heading {{
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
+      align-items: baseline;
       gap: 16px;
-      margin-bottom: 24px;
-    }}
-    .section-heading > div:first-child {{ min-width: 0; flex: 1; }}
-    .section-kicker {{
-      color: var(--muted-soft);
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      margin-bottom: 6px;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--line);
     }}
     .section-heading h2 {{
       margin: 0;
@@ -550,66 +576,80 @@ def build_html(payload: dict) -> str:
       font-weight: 500;
       overflow-wrap: anywhere;
       word-break: break-word;
+      flex: 1;
+      min-width: 0;
     }}
     .score-pill {{
       flex-shrink: 0;
-      padding: 8px 20px;
+      padding: 6px 18px;
       border-radius: var(--radius-pill);
-      background: var(--line);
-      color: var(--ink-near);
+      background: var(--ink);
+      color: var(--bg);
       font-family: var(--font-display);
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 500;
+      letter-spacing: 0.02em;
       min-width: 56px;
       text-align: center;
     }}
-    /* Findings stack vertically — single comfortable reading column for CJK
-       and long detail paragraphs. Wide screens get max-width, not extra cols. */
-    .finding-grid {{
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: 16px;
-    }}
-    .finding-block {{
-      padding: 24px 28px;
-      border-radius: var(--radius-container);
-      background: var(--bg);
-      border: 1px solid var(--line);
-      min-width: 0;
-    }}
-    .finding-block.issues-block {{ background: var(--surface); }}
-    .finding-block h3 {{
+    .subsection {{ margin-top: 24px; }}
+    .subsection:first-of-type {{ margin-top: 0; }}
+    .block-heading {{
       display: flex;
-      align-items: center;
+      align-items: baseline;
       gap: 10px;
+      margin: 0 0 16px;
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
     }}
-    .finding-block .count {{
+    .block-heading .count {{
       font-family: var(--font-body);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 400;
-      color: var(--muted-soft);
       letter-spacing: 0;
+      color: var(--muted-soft);
+      text-transform: none;
     }}
 
-    /* --- Lists -------------------------------------------------------- */
-    ul {{ margin: 0; padding-left: 20px; }}
-    li {{ overflow-wrap: anywhere; word-break: break-word; }}
-    li + li {{ margin-top: 8px; }}
-    .issues-list {{ list-style: none; padding: 0; display: grid; gap: 16px; }}
+    /* --- Issue cards (severity stripe on the left edge) -------------- */
+    .issues-list {{ list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }}
     .issue-item {{
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      gap: 10px;
-      align-items: start;
+      grid-template-columns: 4px minmax(0, 1fr);
+      gap: 16px;
+      padding: 16px 18px 16px 0;
+      border-radius: 0 var(--radius-container) var(--radius-container) 0;
+      background: var(--surface);
+      overflow: hidden;
     }}
-    .issue-item > div {{ min-width: 0; }}
-    .issue-item strong {{ overflow-wrap: anywhere; word-break: break-word; }}
+    .issue-item::before {{
+      content: '';
+      display: block;
+      background: var(--silver);
+      align-self: stretch;
+      border-radius: 2px 0 0 2px;
+    }}
+    .issue-item.sev-p0::before {{ background: var(--ink); }}
+    .issue-item.sev-p1::before {{ background: var(--ink-button); }}
+    .issue-item.sev-p2::before {{ background: var(--muted-soft); }}
+    .issue-item.sev-p3::before {{ background: var(--line-dark); }}
+    .issue-body {{ min-width: 0; padding: 4px 0; }}
+    .issue-meta {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }}
     .severity {{
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 36px;
-      padding: 4px 10px;
+      min-width: 32px;
+      padding: 3px 9px;
       border-radius: var(--radius-pill);
       font-family: var(--font-display);
       font-size: 11px;
@@ -617,13 +657,130 @@ def build_html(payload: dict) -> str:
       letter-spacing: 0.04em;
       flex-shrink: 0;
     }}
-    /* Severity in pure grayscale — saturation conveyed by lightness, not hue */
     .sev-p0 {{ background: var(--ink); color: var(--bg); }}
     .sev-p1 {{ background: var(--ink-button); color: var(--bg); }}
     .sev-p2 {{ background: var(--line); color: var(--ink-near); }}
     .sev-p3 {{ background: var(--bg); color: var(--muted-soft); border: 1px solid var(--line); }}
     .sev-generic {{ background: var(--surface); color: var(--muted); border: 1px solid var(--line); }}
-    .issue-item p {{ margin: 6px 0 0; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; word-break: break-word; }}
+    .issue-title {{
+      display: block;
+      font-family: var(--font-display);
+      font-weight: 500;
+      font-size: 16px;
+      line-height: 1.3;
+      color: var(--ink);
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }}
+    .issue-detail {{
+      margin: 8px 0 0;
+      color: var(--ink-near);
+      font-size: 14.5px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }}
+    .issue-detail code {{ font-size: 13.5px; }}
+
+    /* --- Action checklist (numbered) --------------------------------- */
+    .action-list {{
+      counter-reset: action;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 12px;
+    }}
+    .action-list li {{
+      counter-increment: action;
+      position: relative;
+      padding: 12px 16px 12px 48px;
+      border-radius: var(--radius-container);
+      border: 1px solid var(--line);
+      background: var(--bg);
+      font-size: 14.5px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }}
+    .action-list li::before {{
+      content: counter(action);
+      position: absolute;
+      left: 16px;
+      top: 12px;
+      width: 24px;
+      height: 24px;
+      border-radius: var(--radius-pill);
+      background: var(--ink);
+      color: var(--bg);
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }}
+    .action-list li + li {{ margin-top: 0; }}
+
+    /* --- Supporting details (passed + evidence, collapsed) ----------- */
+    .supporting-row {{
+      display: grid;
+      gap: 8px;
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+    }}
+    .supporting-details {{
+      border-radius: var(--radius-container);
+      padding: 0;
+    }}
+    .supporting-details > summary {{
+      cursor: pointer;
+      padding: 10px 14px;
+      border-radius: var(--radius-pill);
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      list-style: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 120ms ease, color 120ms ease;
+    }}
+    .supporting-details > summary::-webkit-details-marker {{ display: none; }}
+    .supporting-details > summary::before {{
+      content: '▸';
+      display: inline-block;
+      font-size: 10px;
+      color: var(--muted-soft);
+      transition: transform 120ms ease;
+    }}
+    .supporting-details[open] > summary::before {{ transform: rotate(90deg); }}
+    .supporting-details > summary:hover {{
+      background: var(--surface);
+      color: var(--ink);
+    }}
+    .supporting-details > summary .count {{
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 0;
+      color: var(--muted-soft);
+    }}
+    .supporting-details ul {{
+      margin: 12px 0 12px 14px;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }}
+
+    /* --- Generic lists (top-level top_wins / top_issues / method) --- */
+    ul {{ margin: 0; padding-left: 20px; }}
+    li {{ overflow-wrap: anywhere; word-break: break-word; }}
+    li + li {{ margin-top: 8px; }}
 
     /* --- Performance / Roadmap --------------------------------------- */
     .metric-grid {{
