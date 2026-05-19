@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
+from _report_styles import PALETTE_CSS as _PALETTE_CSS
 from language_packs import REPORT_PACKS as LANGUAGE_PACKS
 
 
@@ -306,26 +307,9 @@ def build_html(payload: dict) -> str:
   <title>{html.escape(title)} - {html.escape(target_url)}</title>
   <style>
     /* Ollama-inspired minimalist palette. Pure white canvas, grayscale only,
-       binary radius (12px containers / 9999px pills), zero shadows, system fonts. */
-    :root {{
-      color-scheme: light;
-      --bg: #ffffff;
-      --surface: #fafafa;
-      --ink: #000000;
-      --ink-near: #262626;
-      --ink-button: #404040;
-      --muted: #525252;
-      --muted-soft: #737373;
-      --silver: #a3a3a3;
-      --line: #e5e5e5;
-      --line-dark: #d4d4d4;
-      --radius-container: 12px;
-      --radius-pill: 9999px;
-      --font-display: "SF Pro Rounded", "SF Pro Display", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-      --font-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    }}
-    * {{ box-sizing: border-box; }}
+       binary radius (12px containers / 9999px pills), zero shadows, system fonts.
+       Palette tokens come from _report_styles.PALETTE_CSS. */
+{_PALETTE_CSS}
     html {{ scroll-behavior: smooth; }}
     body {{
       margin: 0;
