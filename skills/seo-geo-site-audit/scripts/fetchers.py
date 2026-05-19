@@ -44,13 +44,21 @@ MAX_BODY_CHARS = 250_000
 FETCH_TIMEOUT = 30
 SCRAPLING_NETWORK_IDLE_TIMEOUT = 60_000  # ms — heavier SPAs need full hydration time
 
-# Lightpanda nightly download URLs
+# Lightpanda binary download URLs.
+# Override the tag via SEO_GEO_LIGHTPANDA_TAG (default: "nightly").
+# Populate LIGHTPANDA_SHA256 to require checksum verification on install.
+LIGHTPANDA_TAG = os.environ.get("SEO_GEO_LIGHTPANDA_TAG", "nightly")
+LIGHTPANDA_BASE = "https://github.com/lightpanda-io/browser/releases/download"
 LIGHTPANDA_URLS = {
-    ("Darwin", "arm64"): "https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-aarch64-macos",
-    ("Darwin", "x86_64"): "https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-x86_64-macos",
-    ("Linux", "x86_64"): "https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-x86_64-linux",
-    ("Linux", "aarch64"): "https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-aarch64-linux",
+    ("Darwin", "arm64"): f"{LIGHTPANDA_BASE}/{LIGHTPANDA_TAG}/lightpanda-aarch64-macos",
+    ("Darwin", "x86_64"): f"{LIGHTPANDA_BASE}/{LIGHTPANDA_TAG}/lightpanda-x86_64-macos",
+    ("Linux", "x86_64"): f"{LIGHTPANDA_BASE}/{LIGHTPANDA_TAG}/lightpanda-x86_64-linux",
+    ("Linux", "aarch64"): f"{LIGHTPANDA_BASE}/{LIGHTPANDA_TAG}/lightpanda-aarch64-linux",
 }
+# Populate with {url: sha256_hex} pairs to enforce checksum verification.
+# Empty by default; install_lightpanda refuses unverified downloads unless
+# SEO_GEO_ALLOW_UNVERIFIED_LIGHTPANDA=1 is set explicitly.
+LIGHTPANDA_SHA256: dict[str, str] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -256,21 +264,50 @@ def install_lightpanda() -> bool:
         print(f"[fetchers] No Lightpanda build for {system}/{arch}", file=sys.stderr)
         return False
 
+    expected_sha = LIGHTPANDA_SHA256.get(url)
+    allow_unverified = os.environ.get("SEO_GEO_ALLOW_UNVERIFIED_LIGHTPANDA") == "1"
+    if expected_sha is None and not allow_unverified:
+        print(
+            f"[fetchers] No SHA256 registered for {url} and SEO_GEO_ALLOW_UNVERIFIED_LIGHTPANDA != 1. "
+            "Refusing unverified binary download. "
+            "Pin a tagged release via SEO_GEO_LIGHTPANDA_TAG and add its sha256 to "
+            "LIGHTPANDA_SHA256, or set SEO_GEO_ALLOW_UNVERIFIED_LIGHTPANDA=1 to opt out.",
+            file=sys.stderr,
+        )
+        return False
+
     print(f"[fetchers] Downloading Lightpanda from {url}...")
     try:
         LIGHTPANDA_DIR.mkdir(parents=True, exist_ok=True)
         tmp_path = LIGHTPANDA_BIN.with_suffix(".tmp")
         _run(["curl", "-L", "-o", str(tmp_path), url], timeout=120)
-        if tmp_path.exists() and tmp_path.stat().st_size > 1_000_000:
-            tmp_path.chmod(0o755)
-            tmp_path.rename(LIGHTPANDA_BIN)
-            print(f"[fetchers] Lightpanda installed at {LIGHTPANDA_BIN}")
-            return True
-        else:
+        if not (tmp_path.exists() and tmp_path.stat().st_size > 1_000_000):
             print("[fetchers] Downloaded file too small — likely failed.", file=sys.stderr)
             tmp_path.unlink(missing_ok=True)
             return False
-    except Exception as exc:
+
+        if expected_sha is not None:
+            import hashlib
+            h = hashlib.sha256()
+            with tmp_path.open("rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
+            actual_sha = h.hexdigest()
+            if actual_sha.lower() != expected_sha.lower():
+                print(
+                    f"[fetchers] SHA256 mismatch — expected {expected_sha}, got {actual_sha}. "
+                    "Refusing to install.",
+                    file=sys.stderr,
+                )
+                tmp_path.unlink(missing_ok=True)
+                return False
+            print(f"[fetchers] SHA256 verified: {actual_sha}")
+
+        tmp_path.chmod(0o755)
+        tmp_path.rename(LIGHTPANDA_BIN)
+        print(f"[fetchers] Lightpanda installed at {LIGHTPANDA_BIN}")
+        return True
+    except (subprocess.SubprocessError, OSError) as exc:
         print(f"[fetchers] Lightpanda install failed: {exc}", file=sys.stderr)
         return False
 
