@@ -413,6 +413,67 @@ def queue_has_url(queue: deque, url: str) -> bool:
     return any(item[0] == url for item in queue)
 
 
+def _empty_page(
+    url: str,
+    discovery_source: str,
+    start_url: str,
+    *,
+    status: int | None,
+    issue_label: str,
+) -> dict:
+    """Placeholder page dict used when fetch fails. Keeps the schema flat with the success path."""
+    return {
+        "url": url,
+        "requested_url": url,
+        "status": status,
+        "rendered_status": None,
+        "content_type": "",
+        "template": classify_url(url, start_url),
+        "discovery_source": discovery_source,
+        "title": "",
+        "rendered_title": "",
+        "meta_description": "",
+        "canonical": "",
+        "rendered_canonical": "",
+        "meta_robots": "",
+        "lang": "",
+        "word_count": 0,
+        "rendered_word_count": 0,
+        "html_bytes": 0,
+        "rendered_html_bytes": 0,
+        "h1_count": 0,
+        "rendered_h1_count": 0,
+        "heading_counts": {},
+        "rendered_heading_counts": {},
+        "internal_links": 0,
+        "rendered_internal_links": 0,
+        "dom_route_hint_links": 0,
+        "external_links": 0,
+        "rendered_external_links": 0,
+        "sample_internal_links": [],
+        "sample_rendered_internal_links": [],
+        "sample_dom_route_hint_links": [],
+        "image_count": 0,
+        "images_missing_alt": 0,
+        "json_ld_types": [],
+        "rendered_json_ld_types": [],
+        "og_coverage": {},
+        "twitter_coverage": {},
+        "has_breadcrumbs_hint": False,
+        "has_author_hint": False,
+        "has_about_or_contact_hint": False,
+        "has_faq_hint": False,
+        "has_list_or_table": False,
+        "has_price_or_specs_hint": False,
+        "render_visibility": {"body_text_in_initial_html": False, "body_text_after_render": False, "excessive_script_ratio": False},
+        "search_engine_visibility": {"allowed_by_robots": True, "raw_status": status},
+        "issues_detected": [issue_label],
+    }
+
+
+_EMPTY_DISCOVERED_LINKS = {"raw_a_href": [], "rendered_a_href": [], "dom_route_hint": []}
+
+
 def parse_page_response(response: dict, start_url: str) -> dict:
     text = response.get("text", "")
     parser = PageParser()
@@ -1344,103 +1405,23 @@ def crawl(start_url: str, max_pages: int, user_agent: str, preferred_fetcher: st
                 discovery_source=discovery_source,
             )
         except urllib.error.HTTPError as exc:
-            page = {
-                "url": current,
-                "requested_url": current,
-                "status": exc.code,
-                "rendered_status": None,
-                "content_type": "",
-                "template": classify_url(current, start_url),
-                "discovery_source": discovery_source,
-                "title": "",
-                "rendered_title": "",
-                "meta_description": "",
-                "canonical": "",
-                "rendered_canonical": "",
-                "meta_robots": "",
-                "lang": "",
-                "word_count": 0,
-                "rendered_word_count": 0,
-                "html_bytes": 0,
-                "rendered_html_bytes": 0,
-                "h1_count": 0,
-                "rendered_h1_count": 0,
-                "heading_counts": {},
-                "rendered_heading_counts": {},
-                "internal_links": 0,
-                "rendered_internal_links": 0,
-                "dom_route_hint_links": 0,
-                "external_links": 0,
-                "rendered_external_links": 0,
-                "sample_internal_links": [],
-                "sample_rendered_internal_links": [],
-                "sample_dom_route_hint_links": [],
-                "image_count": 0,
-                "images_missing_alt": 0,
-                "json_ld_types": [],
-                "rendered_json_ld_types": [],
-                "og_coverage": {},
-                "twitter_coverage": {},
-                "has_breadcrumbs_hint": False,
-                "has_author_hint": False,
-                "has_about_or_contact_hint": False,
-                "has_faq_hint": False,
-                "has_list_or_table": False,
-                "has_price_or_specs_hint": False,
-                "render_visibility": {"body_text_in_initial_html": False, "body_text_after_render": False, "excessive_script_ratio": False},
-                "search_engine_visibility": {"allowed_by_robots": True, "raw_status": exc.code},
-                "issues_detected": [f"http_{exc.code}"],
-            }
-            discovered_links = {"raw_a_href": [], "rendered_a_href": [], "dom_route_hint": []}
-        except Exception as exc:
-            page = {
-                "url": current,
-                "requested_url": current,
-                "status": None,
-                "rendered_status": None,
-                "content_type": "",
-                "template": classify_url(current, start_url),
-                "discovery_source": discovery_source,
-                "title": "",
-                "rendered_title": "",
-                "meta_description": "",
-                "canonical": "",
-                "rendered_canonical": "",
-                "meta_robots": "",
-                "lang": "",
-                "word_count": 0,
-                "rendered_word_count": 0,
-                "html_bytes": 0,
-                "rendered_html_bytes": 0,
-                "h1_count": 0,
-                "rendered_h1_count": 0,
-                "heading_counts": {},
-                "rendered_heading_counts": {},
-                "internal_links": 0,
-                "rendered_internal_links": 0,
-                "dom_route_hint_links": 0,
-                "external_links": 0,
-                "rendered_external_links": 0,
-                "sample_internal_links": [],
-                "sample_rendered_internal_links": [],
-                "sample_dom_route_hint_links": [],
-                "image_count": 0,
-                "images_missing_alt": 0,
-                "json_ld_types": [],
-                "rendered_json_ld_types": [],
-                "og_coverage": {},
-                "twitter_coverage": {},
-                "has_breadcrumbs_hint": False,
-                "has_author_hint": False,
-                "has_about_or_contact_hint": False,
-                "has_faq_hint": False,
-                "has_list_or_table": False,
-                "has_price_or_specs_hint": False,
-                "render_visibility": {"body_text_in_initial_html": False, "body_text_after_render": False, "excessive_script_ratio": False},
-                "search_engine_visibility": {"allowed_by_robots": True, "raw_status": None},
-                "issues_detected": [f"fetch_error:{type(exc).__name__}"],
-            }
-            discovered_links = {"raw_a_href": [], "rendered_a_href": [], "dom_route_hint": []}
+            page = _empty_page(
+                current,
+                discovery_source,
+                start_url,
+                status=exc.code,
+                issue_label=f"http_{exc.code}",
+            )
+            discovered_links = dict(_EMPTY_DISCOVERED_LINKS)
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+            page = _empty_page(
+                current,
+                discovery_source,
+                start_url,
+                status=None,
+                issue_label=f"fetch_error:{type(exc).__name__}",
+            )
+            discovered_links = dict(_EMPTY_DISCOVERED_LINKS)
         pages.append(page)
 
         # Detect domain type from homepage for route guessing
