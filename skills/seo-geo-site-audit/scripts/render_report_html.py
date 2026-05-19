@@ -373,7 +373,10 @@ def build_html(payload: dict) -> str:
     }}
     a {{ color: var(--ink); text-decoration: none; border-bottom: 1px solid transparent; }}
     a:hover {{ border-bottom-color: var(--ink); }}
-    main {{ max-width: 1080px; margin: 0 auto; padding: 24px 24px 96px; }}
+    /* Comfortable reading width (~70-75 chars on body text). All top-level
+       boxes — snapshot, scorecard, findings, performance, roadmap — share
+       this width so left/right edges align down the full report. */
+    main {{ max-width: 820px; margin: 0 auto; padding: 24px 24px 96px; }}
     code, pre, .mono {{ font-family: var(--font-mono); }}
 
     /* --- Top navigation ----------------------------------------------- */
@@ -553,7 +556,6 @@ def build_html(payload: dict) -> str:
     .finding-section {{
       margin-top: 24px;
       padding: 32px 32px 28px;
-      max-width: 820px;
     }}
     .section-heading {{
       display: flex;
@@ -814,7 +816,6 @@ def build_html(payload: dict) -> str:
     .roadmap-grid {{
       display: grid;
       gap: 12px;
-      max-width: 820px;
     }}
     .roadmap-column {{
       display: grid;
