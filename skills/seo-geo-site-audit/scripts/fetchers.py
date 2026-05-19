@@ -120,6 +120,28 @@ DOM_LINK_EXTRACT_JS = """(() => {
       walk(window.__NUXT__);
     }
   } catch(e) {}
+  // 6. Remix (__remixContext) + SvelteKit (__sveltekit_data) — walk for href/to/path/url strings
+  const walkFor = (root) => {
+    const walk = (obj) => {
+      if (!obj || typeof obj !== 'object') return;
+      ['href','to','path','url','pathname'].forEach(k => {
+        const v = obj[k];
+        if (typeof v === 'string' && v.startsWith('/')) {
+          try { frameworkHints.add(new URL(v, document.baseURI).href); } catch(e) {}
+        }
+      });
+      Object.values(obj).forEach(walk);
+    };
+    walk(root);
+  };
+  try { if (window.__remixContext) walkFor(window.__remixContext); } catch(e) {}
+  try { if (window.__sveltekit_data) walkFor(window.__sveltekit_data); } catch(e) {}
+  // 7. Astro — data-astro-page-data JSON islands carry route metadata
+  try {
+    document.querySelectorAll('script[type="application/json"][data-astro-page-data]').forEach(el => {
+      try { walkFor(JSON.parse(el.textContent || '{}')); } catch(e) {}
+    });
+  } catch(e) {}
   return JSON.stringify({
     anchors: [...anchors],
     attribute_hints: [...attributeHints],
