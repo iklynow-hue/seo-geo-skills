@@ -40,17 +40,48 @@ def severity_class(value: str) -> str:
     }.get((value or "").upper(), "sev-generic")
 
 
-def render_list(items: list[str], empty_label: str) -> str:
-    """Render a list of prose strings.
+_ALLOWED_INLINE_TAGS = re.compile(
+    r"</?(?:strong|em|code|br|small)(?:\s[^>]*)?/?>",
+    re.IGNORECASE,
+)
 
-    The payload is agent-authored, not user input, so inline HTML in items
-    (e.g. <strong>, <code>) is treated as content, not escaped. The renderer
-    only escapes user-untrusted fields like target_url, headers, and snapshot
-    label/value pairs.
+
+def sanitize_prose(value: object) -> str:
+    """Allow a small set of inline HTML tags from the agent-authored payload,
+    escape every other tag.
+
+    The agent writes prose with inline emphasis like <strong>X</strong> and
+    <code>Y</code>. Earlier render code passed all prose through as raw HTML,
+    which let a stray <h1> in an issue title render as a real heading and
+    break the layout. This sanitizer keeps the small allowlist of inline
+    formatting tags and escapes anything else (h1, div, script, a, etc.) by
+    converting the surrounding < > to &lt; &gt;.
+
+    Pre-escaped entities like &lt;link rel="canonical"&gt; in the payload
+    are preserved verbatim (we only touch < and > characters).
+    """
+    if not isinstance(value, str):
+        return "" if value is None else str(value)
+    out: list[str] = []
+    pos = 0
+    for match in _ALLOWED_INLINE_TAGS.finditer(value):
+        chunk = value[pos:match.start()].replace("<", "&lt;").replace(">", "&gt;")
+        out.append(chunk)
+        out.append(match.group(0))
+        pos = match.end()
+    tail = value[pos:].replace("<", "&lt;").replace(">", "&gt;")
+    out.append(tail)
+    return "".join(out)
+
+
+def render_list(items: list[str], empty_label: str) -> str:
+    """Render a list of prose strings. Prose passes through sanitize_prose so
+    inline <strong>/<code> work but stray <h1>/<a>/<div> get escaped instead
+    of rendering as real elements and breaking the layout.
     """
     if not items:
         return f"<p class='empty'>{html.escape(empty_label)}</p>"
-    return "<ul>" + "".join(f"<li>{item}</li>" for item in items) + "</ul>"
+    return "<ul>" + "".join(f"<li>{sanitize_prose(item)}</li>" for item in items) + "</ul>"
 
 
 def render_issue_items(items: list[object], empty_label: str) -> str:
@@ -83,11 +114,13 @@ def render_issue_items(items: list[object], empty_label: str) -> str:
                 # badge span (which would otherwise paint the entire card).
                 tier_class = sev_class.replace("sev-", "tier-") if sev_class.startswith("sev-") else "tier-generic"
                 badge = f"<span class='severity {sev_class}'>{html.escape(severity or 'Issue')}</span>"
-                if title:
-                    headline = title
-                    body = f"<p class='issue-detail'>{detail}</p>" if detail else ""
+                clean_title = sanitize_prose(title)
+                clean_detail = sanitize_prose(detail)
+                if clean_title:
+                    headline = clean_title
+                    body = f"<p class='issue-detail'>{clean_detail}</p>" if clean_detail else ""
                 else:
-                    headline = detail or severity or "Issue"
+                    headline = clean_detail or html.escape(severity) or "Issue"
                     body = ""
                 rendered.append(
                     f"<li class='issue-item {tier_class}'>"
@@ -99,7 +132,7 @@ def render_issue_items(items: list[object], empty_label: str) -> str:
                     "</li>"
                 )
             continue
-        rendered.append(f"<li>{item}</li>")
+        rendered.append(f"<li>{sanitize_prose(item)}</li>")
     return "<ul class='issues-list'>" + "".join(rendered) + "</ul>"
 
 
@@ -301,7 +334,7 @@ def build_html(payload: dict) -> str:
             "<div class='subsection'>"
             f"<h3 class='block-heading'>{html.escape(ui['recommended_actions'])} <span class='count'>{actions_count}</span></h3>"
             f"<ol class='action-list'>"
-            + "".join(f"<li>{item}</li>" for item in actions)
+            + "".join(f"<li>{sanitize_prose(item)}</li>" for item in actions)
             + "</ol>"
             "</div>"
         ) if actions_count else ""
