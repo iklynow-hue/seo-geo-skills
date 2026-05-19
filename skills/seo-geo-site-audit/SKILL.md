@@ -1,6 +1,6 @@
 ---
 name: seo-geo-site-audit
-description: Run repeatable SEO and GEO website audits for public sites. Use this skill whenever the user asks for an SEO audit, GEO audit, AI visibility review, technical content-readiness review, site-quality review, crawlability check, or asks Claude to audit, score, or grade a public website — even if they don't say the word "skill". The skill crawls a representative sample of up to 50 pages, compares raw Googlebot-style HTML against rendered DOM, reviews crawlability, metadata, internal linking, structured data, trust signals, and runs local Lighthouse for mobile/desktop performance evidence, then produces a scored report with passed items, P0-P3 issues, evidence, and prioritized actions.
+description: Run repeatable SEO and GEO website audits for public sites. Use this skill whenever the user asks for an SEO audit, GEO audit, AI visibility review, technical content-readiness review, site-quality review, crawlability check, or asks Claude to audit, score, or grade a public website — even if they don't say the word "skill". The skill crawls a representative sample of up to 50 pages, compares raw Googlebot-style HTML against rendered DOM, reviews crawlability, metadata, internal linking, structured data, trust signals, and runs local Lighthouse for mobile/desktop performance evidence, then produces a scored report with passed items, P0-P3 issues, and prioritized actions.
 ---
 
 # SEO GEO Site Audit
@@ -92,7 +92,7 @@ The skill typically lives at `~/.claude/skills/seo-geo-site-audit/`. The wrapper
 
    Round to whole numbers. Penalize recurring sitewide failures more than isolated page issues. Reward consistent structural wins. If the sample is small, say confidence is lower. Display section weights as percentages (`20%`, not `20`) and prefer a scorecard structure like `section / score / weight (%) / contribution / notes`.
 
-7. **Write the report.** Follow [`references/report-template.md`](references/report-template.md); if HTML is on, also follow `references/report-payload-template.json`. Every section needs score, what passed, issues, evidence, recommended actions. Every issue needs severity (P0/P1/P2/P3), affected URLs/templates, why it matters, what to fix. Keep the written report in the selected output language. Always label Lighthouse evidence as lab data without CrUX field metrics.
+7. **Write the report.** Follow [`references/report-template.md`](references/report-template.md); if HTML is on, also follow `references/report-payload-template.json`. Every section needs score, what passed, issues, recommended actions. Every issue needs severity (P0/P1/P2/P3), affected URLs/templates, why it matters, what to fix — embed the supporting numbers (coverage rates, page counts, raw observed values) directly in the issue detail prose rather than in a separate block. Keep the written report in the selected output language. Always label Lighthouse evidence as lab data without CrUX field metrics.
 
    If HTML output is enabled, write the chat audit first, then render the polished HTML:
 

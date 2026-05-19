@@ -308,11 +308,9 @@ def build_html(payload: dict) -> str:
         passed = [str(item) for item in section.get("passed_items", [])]
         issues = section.get("issues", [])
         actions = [str(item) for item in section.get("recommended_actions", [])]
-        evidence = [str(item) for item in section.get("evidence", [])]
         passed_count = len(passed)
         issues_count = len(issues)
         actions_count = len(actions)
-        evidence_count = len(evidence)
         # Reading order: title + score, then issues (the work to do), then actions
         # (what to do about it), then passed items + evidence collapsed at the
         # bottom (supporting context, not the focus).
@@ -336,15 +334,9 @@ def build_html(payload: dict) -> str:
             f"{render_list(passed, ui['not_provided'])}"
             "</details>"
         ) if passed_count else ""
-        evidence_details = (
-            "<details class='supporting-details'>"
-            f"<summary>{html.escape(ui.get('evidence', 'Evidence'))} <span class='count'>{evidence_count}</span></summary>"
-            f"{render_list(evidence, ui['not_provided'])}"
-            "</details>"
-        ) if evidence_count else ""
         supporting_block = (
-            f"<div class='supporting-row'>{passed_details}{evidence_details}</div>"
-        ) if (passed_count or evidence_count) else ""
+            f"<div class='supporting-row'>{passed_details}</div>"
+        ) if passed_count else ""
         rendered_sections.append(
             f"<section class='finding-section panel' id='{section_id}'>"
             "<div class='section-heading'>"

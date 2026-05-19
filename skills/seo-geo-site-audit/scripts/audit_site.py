@@ -274,7 +274,6 @@ def build_final_report_seed(
                 "score": "",
                 "passed_items": [],
                 "issues": [],
-                "evidence": [],
                 "recommended_actions": [],
             }
         )

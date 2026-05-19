@@ -80,10 +80,6 @@ Interpretation rules:
 
 - **[P?] [issue]** — [why it matters]
 
-**Evidence**
-
-- [url or pattern]
-
 **Recommended actions**
 
 - [action]
@@ -97,10 +93,6 @@ Interpretation rules:
 **Issues**
 
 - **[P?] [issue]** — [why it matters]
-
-**Evidence**
-
-- [evidence]
 
 **Recommended actions**
 
@@ -116,10 +108,6 @@ Interpretation rules:
 
 - **[P?] [issue]** — [why it matters]
 
-**Evidence**
-
-- [evidence]
-
 **Recommended actions**
 
 - [action]
@@ -133,10 +121,6 @@ Interpretation rules:
 **Issues**
 
 - **[P?] [issue]** — [why it matters]
-
-**Evidence**
-
-- [evidence]
 
 **Recommended actions**
 
@@ -152,10 +136,6 @@ Interpretation rules:
 
 - **[P?] [issue]** — [why it matters]
 
-**Evidence**
-
-- [evidence]
-
 **Recommended actions**
 
 - [action]
@@ -169,10 +149,6 @@ Interpretation rules:
 **Issues**
 
 - **[P?] [issue]** — [why it matters]
-
-**Evidence**
-
-- [evidence]
 
 **Recommended actions**
 
@@ -188,11 +164,11 @@ Interpretation rules:
 
 - **[P?] [issue]** — [why it matters]
 
-**Evidence**
+**Recommended actions**
 
-- mobile average: [score / metrics]
-- desktop average: [score / metrics]
-- notable outliers: [urls]
+- [action]
+
+(Use mobile + desktop Lighthouse averages and notable outlier URLs inline in the issue prose where relevant.)
 
 **Recommended actions**
 
