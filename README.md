@@ -2,36 +2,29 @@
 
 Claude Code skill for sampled SEO + GEO audits of public sites.
 
-- capped crawling up to 50 pages
-- template-aware sampling
-- raw Googlebot-style baseline compared with rendered browser evidence
-- local Lighthouse via a programmatic node runner (`lighthouse` + `chrome-launcher`)
-- final polished HTML reporting from the same structured content as the written audit
+- Capped crawl up to 50 pages, template-aware sampling
+- Raw Googlebot-style HTTP baseline compared with browser-rendered evidence
+- Local Lighthouse (no remote API) via `lighthouse` + `chrome-launcher`
+- Final polished HTML report from the same structured payload as the chat audit
 
-## Install in one paste
+中文版见[下方](#seo-geo-skills-中文)。
 
-In a Claude Code session, paste this:
+## Install
+
+Paste this into a Claude Code session:
 
 ```text
 Install this skill: https://github.com/iklynow-hue/seo-geo-skills
 ```
 
-Claude will read this README and run the install for you. After it finishes, **start a new Claude Code session** so the skill is picked up, then say:
+Claude reads this README and runs the install. Open a fresh Claude Code session afterward so the skill is picked up.
 
-```text
-Conduct a SEO and GEO audit for https://example.com
-```
+### Manual install
 
-Claude will autodiscover the `seo-geo-site-audit` skill, walk through the setup questions, and run the audit.
-
-## What Claude should run to install
-
-If you (or Claude) are running the install manually, this is the exact recipe.
-
-**Prerequisites:** `git`, `python3`, `node` + `npm`. Chrome will be downloaded by `chrome-launcher` on first Lighthouse run if not present.
+**Prerequisites:** `git`, `python3`, `node` + `npm`. Chrome is downloaded by `chrome-launcher` on first Lighthouse run if not present.
 
 ```bash
-# 1. Clone the repo to a stable location
+# 1. Clone to a stable location
 mkdir -p ~/.claude
 git clone https://github.com/iklynow-hue/seo-geo-skills ~/.claude/seo-geo-skills
 
@@ -39,169 +32,69 @@ git clone https://github.com/iklynow-hue/seo-geo-skills ~/.claude/seo-geo-skills
 mkdir -p ~/.claude/skills
 ln -s ~/.claude/seo-geo-skills/skills/seo-geo-site-audit ~/.claude/skills/seo-geo-site-audit
 
-# 3. Install the local Lighthouse runner's npm deps (one-time, ~120MB)
+# 3. Install the Lighthouse runner's npm deps (~120 MB, one-time)
 cd ~/.claude/seo-geo-skills/skills/seo-geo-site-audit/scripts && npm install
 ```
 
-That's it. Open a new Claude Code session and the skill will autotrigger on any SEO/GEO audit request.
+Per-project install instead: replace `~/.claude/skills/` with `.claude/skills/` inside the project root.
 
-### Optional: per-project install instead
-
-If you want the skill only available inside one project, symlink it under that project instead of `~/.claude/skills/`:
-
-```bash
-mkdir -p .claude/skills
-ln -s ~/.claude/seo-geo-skills/skills/seo-geo-site-audit .claude/skills/seo-geo-site-audit
-```
-
-### Optional fetcher prerequisites
-
-The crawl works with `urllib` alone, but it is more accurate on SPA sites when one or more of these are present. Skip them initially — the wrapper detects what is available at run time, and you can add `--auto-install-prereqs` later.
-
-- `scrapling[fetchers]` (`pip install "scrapling[fetchers]"` + `scrapling install`)
-- `lightpanda` (downloads to `~/.local/bin/lightpanda` on first auto-install)
-- `agent-browser` (`npm install -g agent-browser` + `agent-browser install`)
-
-## Update
-
-The skill is a symlink, so updates are just:
+### Update
 
 ```bash
 cd ~/.claude/seo-geo-skills && git pull
+# If scripts/package.json changed:
+cd skills/seo-geo-site-audit/scripts && npm install
 ```
 
-If `package.json` changed under `skills/seo-geo-site-audit/scripts/`, rerun `npm install` in that directory.
+### Optional fetchers
+
+`urllib` works alone, but SPA accuracy improves with one of these. Skip initially; the wrapper detects what's available at run time. Add `--auto-install-prereqs` later if you want.
+
+- `scrapling[fetchers]` — `pip install "scrapling[fetchers]" && scrapling install`
+- `lightpanda` — `~/.local/bin/lightpanda` on first auto-install
+- `agent-browser` — `npm install -g agent-browser && agent-browser install`
 
 ## Use it
 
-After install, open a fresh Claude Code session and say things like:
+In chat:
 
-- `Conduct a SEO and GEO audit for https://example.com`
+- `Conduct an SEO and GEO audit for https://example.com`
 - `Audit this site for AI visibility: https://example.com`
-- `Run a 50-page SEO + GEO audit for https://example.com, generate the HTML report, output in Chinese`
+- `Run a 50-page audit for https://example.com, generate the HTML report, output in Chinese`
 
-Claude will pick up the `seo-geo-site-audit` skill from `~/.claude/skills/` and walk through:
+The skill asks five setup questions before crawling:
 
-1. Scope (1 / 10 / 50 / custom pages)
-2. Output style (Operator / Boss / Specialist)
-3. Performance evidence (run local Lighthouse or skip)
-4. HTML report on / off
-5. Final output language
+1. **Scope** — Fast (1) / Light (10) / Standard (50) / Custom (1–50)
+2. **Output style** — Operator (default) / Boss / Specialist
+3. **Performance** — Local Lighthouse (default) / Skip
+4. **HTML report** — Off (default) / On
+5. **Output language** — English (default) / Chinese / Other
 
-### These five questions are mandatory
+### The five questions are mandatory
 
-The skill **always** asks them, even in sessions where you've told Claude to skip clarifying questions or operate autonomously. SEO/GEO audits are long and opinionated, so the skill refuses to silently pick scope, performance, HTML, or output language for you.
+The skill asks them even in sessions where you've told Claude to skip clarifying questions. Audits are long and opinionated; the skill refuses to silently pick scope, performance, HTML, or language for you. Two waivers exist:
 
-You can skip the questionnaire in two ways:
+- Answer all five upfront — `Audit https://example.com — 50 pages, Operator, Lighthouse on, HTML on, output in Chinese.`
+- Explicit defaults opt-in — `Audit https://example.com, use defaults for everything.`
 
-- **Answer all five upfront**, e.g.
-  ```
-  Audit https://example.com — 50 pages, Operator output, local Lighthouse on, HTML report on, output in Chinese.
-  ```
-- **Explicitly opt in to defaults**, e.g.
-  ```
-  Audit https://example.com, use defaults for everything.
-  ```
+"Just go" / "be quick" / "stop asking" do **not** waive the questions.
 
-Any other phrasing ("just go", "be quick", "stop asking") will still trigger the questions, by design.
+### Limits to know
 
-Current implementation limits to know up front:
+- Crawl cap: 1–50 pages (`fast=1`, `light=10`, `template=50`; default `light`).
+- Lighthouse: 1 homepage URL by default (mobile + desktop), max 10 via `--max-pagespeed-urls`.
+- SPA route expansion is sample-based, not a full app crawler.
+- Routes from `dom_route_hint` or `route_guess` are labeled **assisted discovery** — not search-engine crawl proof.
 
-- crawl cap: `1` to `50` pages
-- audit presets: `fast=1`, `light=10`, `template=50`
-- default audit scope: `light=10`
-- Lighthouse URLs: default `1` homepage URL, maximum `10`
-- best-effort SPA route expansion is capped and still sample-based, not a full app crawler
-- SPA route hints and guessed URLs are labeled as assisted discovery, not search-engine crawl proof
+## Terminal usage
 
-## Use Cases
-
-Use `seo-geo-site-audit` when you want:
-
-- an SEO audit
-- a GEO / AI visibility audit
-- a sampled site-quality review instead of a full crawl
-- a scored report with evidence, issues, and recommended actions
-- HTML output for sharing
-
-## SPA And Search Crawlability
-
-The crawler keeps two evidence tracks for each HTML page:
-
-- `search_engine_visibility`: raw Googlebot-style HTTP baseline, no JavaScript.
-- rendered browser evidence: what the SPA shows after JavaScript runs.
-
-This is intentional. Browser rendering helps inspect SPA content, but the report should treat any content, navigation, schema, or route that only appears after rendering as a risk. Pages discovered only through `dom_route_hint` or `route_guess` are audit assistance, not proof that search engines can crawl them.
-
-## Chat Usage
-
-Start with:
-
-```text
-Use $seo-geo-site-audit to audit https://example.com
-```
-
-The skill is designed to ask setup questions one by one before crawling:
-
-1. Scope
-2. Output style
-3. Performance evidence (run local Lighthouse or skip)
-4. HTML report on/off
-5. Final output language
-
-Language confirmation is mandatory for the skill flow. The audit should not proceed to the final report until the user confirms the language or explicitly accepts the default English.
-
-If you already know your preferences, you can put them in the first prompt and skip the questionnaire. If scope, output style, performance on/off, HTML on/off, and final language are all clearly stated, the agent should use them directly instead of asking again.
-
-Example:
-
-```text
-Use $seo-geo-site-audit to audit https://example.com with light mode, Operator output, local Lighthouse on, HTML report on, and final report in Chinese.
-```
-
-Default first test:
-
-- keep local Lighthouse on
-- keep the default output style
-- start with the default `10-page` light audit
-- turn HTML on if you want a shareable artifact
-
-Current performance choices:
-
-- `1. Run local Lighthouse (default)`
-- `2. Skip performance`
-
-Performance collection defaults to the landing page only. The wrapper tests one homepage URL with both mobile and desktop strategies, which keeps audits fast and avoids long Lighthouse waits on heavy SPA routes. Use `--max-pagespeed-urls` only when you explicitly need extra template coverage.
-
-The final language choices are:
-
-- `1. English (default)`
-- `2. Chinese`
-- `3. Other (type it in)`
-
-Language note:
-
-- the written audit and final polished HTML should use the same selected language
-- English and Chinese are first-class built-in options
-- for another language, the agent can still render the final report in that language by filling the structured report payload before rendering HTML
-
-If the agent skips the setup questions, you can prompt it more explicitly:
-
-```text
-Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions one by one with numbered options for scope, output style, performance handling, HTML report, and final output language before you begin.
-```
-
-## Terminal Usage
-
-Use the wrapper for normal runs (replace `${SKILL_DIR}` with your actual install path, e.g. `~/.claude/skills/seo-geo-site-audit`):
+Replace `${SKILL_DIR}` with your install path, e.g. `~/.claude/skills/seo-geo-site-audit`.
 
 ```bash
-"${SKILL_DIR}/scripts/audit-site" \
-  https://example.com \
-  --output-style operator
+"${SKILL_DIR}/scripts/audit-site" https://example.com --output-style operator
 ```
 
-Example with HTML output in Chinese:
+Standard audit with HTML in Chinese:
 
 ```bash
 "${SKILL_DIR}/scripts/audit-site" \
@@ -212,7 +105,7 @@ Example with HTML output in Chinese:
   --report-language chinese
 ```
 
-Then render the polished final HTML after you fill `final-report.json`:
+After Claude fills `final-report.json`, render the polished HTML:
 
 ```bash
 "${SKILL_DIR}/scripts/render-report-html" \
@@ -220,250 +113,151 @@ Then render the polished final HTML after you fill `final-report.json`:
   --out "${SKILL_DIR}/runs/site-audit-example.com-<stamp>/audit-report.html"
 ```
 
-Useful options:
+Common flags (full list in [`skills/seo-geo-site-audit/references/cli-flags.md`](skills/seo-geo-site-audit/references/cli-flags.md)):
 
-- `--mode fast|light|template` which map to `1`, `10`, and `50` pages
-- `--max-pages 1-50`
+- `--mode fast|light|template` — 1 / 10 / 50 pages
+- `--max-pages 1-50` — override cap
 - `--output-style boss|operator|specialist`
-- `--max-pagespeed-urls 1-10` (default `1`; homepage only, tested once on mobile and once on desktop)
-- `--skip-pagespeed`
-- `--html-report`
-- `--report-language english|chinese` for the wrapper's evidence HTML and seeded final report payload
+- `--max-pagespeed-urls 1-10` — default 1 (homepage only)
+- `--skip-pagespeed`, `--html-report`
+- `--report-language english|chinese`
 - `--fetcher auto|scrapling|lightpanda|agent_browser|chrome|urllib`
-- `--auto-install-prereqs`
-- `--skip-prereq-check`
-- `--out-dir /path/to/output`
+- `--auto-install-prereqs`, `--skip-prereq-check`, `--out-dir /path`
 
-Artifacts:
+### Artifacts produced
 
-- `crawl.json`
-- `pagespeed.json` unless skipped
-- `audit-run.json`
-- `evidence-report.html` when HTML output is enabled
-- `final-report.json` as a seeded payload for the final polished report
-- `audit-report.html` after you render the final polished report from `final-report.json`
+- `crawl.json` — crawl evidence + per-page signals
+- `pagespeed.json` — Lighthouse data (unless skipped)
+- `audit-run.json` — manifest of the run
+- `evidence-report.html` — raw evidence HTML (with `--html-report`)
+- `final-report.json` — seeded payload that Claude fills in
+- `audit-report.html` — final polished HTML, rendered from `final-report.json`
 
-Final HTML flow in the skill:
+### Final HTML flow
 
-1. The wrapper gathers crawl and Lighthouse evidence.
-2. The wrapper writes `evidence-report.html` and seeds `final-report.json`.
-3. The agent writes the final audit in the selected language and fills `final-report.json`.
-4. The renderer turns that payload into the final `audit-report.html`.
+1. The wrapper collects crawl + Lighthouse evidence.
+2. It writes `evidence-report.html` and seeds `final-report.json`.
+3. Claude writes the chat audit in the chosen language and completes `final-report.json`.
+4. The renderer turns the payload into `audit-report.html`.
+
+## How the crawler thinks about SPAs
+
+Two evidence tracks per HTML page:
+
+- **`search_engine_visibility`** — raw Googlebot-style HTTP baseline, no JavaScript.
+- **Rendered browser evidence** — what the SPA shows after JS runs.
+
+Content, navigation, schema, or routes that only appear after rendering are flagged as a JavaScript-dependency risk, not as "Google can't see it." Pages reached only through `dom_route_hint` or `route_guess` are audit assistance, not crawlability proof.
 
 ## Security
 
-This repo is intended to be safe for public cloning.
+The repo is intended to be safe for public cloning.
 
-- No API keys, tokens, or secrets should be hardcoded in source, docs, or artifacts.
-- The skill does not require any third-party API key for performance evidence; Lighthouse runs locally.
+- No API keys / tokens / secrets in source, docs, or artifacts.
+- Lighthouse runs locally — no third-party API key required.
+- Chrome's sandbox stays on by default; opt-in via `SEO_GEO_ALLOW_NO_SANDBOX=1` only for trusted root/CI/container environments.
+- Auto-install of optional fetchers is opt-in only (`--auto-install-prereqs`). Lightpanda binary downloads require a registered SHA256 or an explicit `SEO_GEO_ALLOW_UNVERIFIED_LIGHTPANDA=1`.
 
-See:
+Full security notes: [`skills/seo-geo-site-audit/SECURITY.md`](skills/seo-geo-site-audit/SECURITY.md).
 
-- [skills/seo-geo-site-audit/SECURITY.md](skills/seo-geo-site-audit/SECURITY.md)
+## Contributing
 
-## Contribution Policy
-
-Cloning and forking are welcome.
-
-If you find this repo useful, a star is always appreciated.
-
-If you run into a bug or have a suggestion, feel free to open an issue.
+Cloning and forking are welcome. Stars are appreciated. Bugs and suggestions → please open an issue.
 
 ---
 
-# SEO GEO Skills 中文说明
+# SEO GEO Skills 中文
 
-公开技能仓库：
+Claude Code 技能，对公开网站做采样式 SEO + GEO 审核。
 
-- `skills/seo-geo-site-audit/`
+- 最多抓取 50 页，按模板抽样
+- 对比 raw Googlebot 风格 HTTP 基线和浏览器渲染证据
+- 通过 `lighthouse` + `chrome-launcher` 在本地跑 Lighthouse（不需要远程 API）
+- 最终 HTML 报告与终端审核报告共用同一份结构化 payload
 
-这是一个 Claude Code 技能，用于对公开网站进行采样式 SEO + GEO 审核，支持：
+## 安装
 
-- 最多 50 页的上限抓取
-- 按模板类型抽样
-- 对比 raw Googlebot 风格基线和浏览器渲染证据
-- 通过 `lighthouse` + `chrome-launcher` 在本地编程式运行 Lighthouse
-- 基于与终端报告相同结构内容生成最终 HTML 报告
-
-## 一次粘贴完成安装
-
-在 Claude Code 会话里直接粘贴：
+在 Claude Code 会话中粘贴：
 
 ```text
 帮我安装这个 skill: https://github.com/iklynow-hue/seo-geo-skills
 ```
 
-Claude 会读取本 README 并替你执行安装。完成后**重启一个 Claude Code 会话**让 skill 被加载，然后说：
+Claude 会读取本 README 并执行安装。完成后请开一个新的 Claude Code 会话让 skill 被加载。
 
-```text
-帮我对 https://example.com 做一次 SEO 和 GEO 审核
-```
+### 手动安装
 
-Claude 会自动匹配 `seo-geo-site-audit` skill，按顺序问你配置，再开始审核。
-
-## 手动安装步骤（也是 Claude 会执行的）
-
-**前置：** `git`、`python3`、`node` + `npm`。Chrome 在首次跑 Lighthouse 时如未安装会由 `chrome-launcher` 自动下载。
+**前置：** `git`、`python3`、`node` + `npm`。首次运行 Lighthouse 时，`chrome-launcher` 会按需下载 Chrome。
 
 ```bash
-# 1. 把仓库 clone 到稳定位置
+# 1. 克隆到稳定位置
 mkdir -p ~/.claude
 git clone https://github.com/iklynow-hue/seo-geo-skills ~/.claude/seo-geo-skills
 
-# 2. 把 skill 软链到 Claude Code 用户级 skills 目录
+# 2. 将 skill 软链到 Claude Code 用户级 skills 目录
 mkdir -p ~/.claude/skills
 ln -s ~/.claude/seo-geo-skills/skills/seo-geo-site-audit ~/.claude/skills/seo-geo-site-audit
 
-# 3. 安装本地 Lighthouse runner 的 npm 依赖（一次性，约 120MB）
+# 3. 安装 Lighthouse runner 的 npm 依赖（约 120 MB，一次性）
 cd ~/.claude/seo-geo-skills/skills/seo-geo-site-audit/scripts && npm install
 ```
 
-打开新的 Claude Code 会话，任何 SEO/GEO 审核请求都会自动触发本 skill。
+只想在项目内使用：把上面的 `~/.claude/skills/` 替换成项目根下的 `.claude/skills/`。
 
-### 可选：仅项目级安装
-
-如果只想在某个项目内使用，把符号链接放到项目的 `.claude/skills/` 而不是 `~/.claude/skills/`：
+### 更新
 
 ```bash
-mkdir -p .claude/skills
-ln -s ~/.claude/seo-geo-skills/skills/seo-geo-site-audit .claude/skills/seo-geo-site-audit
+cd ~/.claude/seo-geo-skills && git pull
+# 如果 scripts/package.json 有变更：
+cd skills/seo-geo-site-audit/scripts && npm install
 ```
 
 ### 可选爬虫前置依赖
 
-爬虫只用 `urllib` 也能跑，但 SPA 站点上下面任意一个工具在场会更准确。可以先跳过——包装脚本会在运行时自动检测，你之后随时可以加 `--auto-install-prereqs`：
+只用 `urllib` 也能跑，但 SPA 站点上以下任意一个工具在场会更准确。建议先跳过；包装脚本会在运行时检测，需要时再加 `--auto-install-prereqs`：
 
-- `scrapling[fetchers]` (`pip install "scrapling[fetchers]"` + `scrapling install`)
-- `lightpanda` (首次 auto-install 时下载到 `~/.local/bin/lightpanda`)
-- `agent-browser` (`npm install -g agent-browser` + `agent-browser install`)
+- `scrapling[fetchers]` — `pip install "scrapling[fetchers]" && scrapling install`
+- `lightpanda` — 首次 auto-install 时下载到 `~/.local/bin/lightpanda`
+- `agent-browser` — `npm install -g agent-browser && agent-browser install`
 
-## 更新
+## 使用
 
-skill 是符号链接，更新只需一行：
-
-```bash
-cd ~/.claude/seo-geo-skills && git pull
-```
-
-如果 `skills/seo-geo-site-audit/scripts/` 下的 `package.json` 有变化，在该目录里再跑一次 `npm install`。
-
-## 用起来
-
-安装完后开一个新 Claude Code 会话，直接说：
+聊天里直接说：
 
 - `帮我对 https://example.com 做一次 SEO 和 GEO 审核`
 - `帮我审核这个站点的 AI 可见性: https://example.com`
-- `跑一次 50 页的 SEO + GEO 审核 https://example.com，输出 HTML 报告，结果用中文`
+- `跑一次 50 页的审核 https://example.com，输出 HTML 报告，结果用中文`
 
-Claude 会从 `~/.claude/skills/` 找到 `seo-geo-site-audit` skill，并按顺序问你：
+抓取前 skill 会按顺序问五个问题：
 
-1. 抓取范围（1 / 10 / 50 / 自定义）
-2. 输出风格（Operator / Boss / Specialist）
-3. 性能证据（运行本地 Lighthouse 或跳过）
-4. 是否要 HTML 报告
-5. 最终输出语言
+1. **抓取范围** — Fast (1) / Light (10，默认) / Standard (50) / 自定义
+2. **输出风格** — Operator（默认）/ Boss / Specialist
+3. **性能证据** — 本地 Lighthouse（默认）/ 跳过
+4. **HTML 报告** — 关（默认）/ 开
+5. **输出语言** — English（默认）/ Chinese / Other
 
 ### 这五个问题是强制的
 
-skill **始终**会问这五个问题，即使你在当前会话里已经让 Claude "不要再追问 / autonomous / 直接做" 也一样。SEO/GEO 审核又长又主观，skill 故意不允许它默默替你决定范围、性能、HTML、语言。
+即使你告诉 Claude 在当前会话里不要追问，skill 仍会问这五项。审核又长又主观，skill 不允许它默默替你定范围、性能、HTML、语言。只有两种放弃问询的方式：
 
-只有两种方式可以跳过问询：
+- 首句一次性给齐五个答案：`审核 https://example.com —— 50 页，Operator 风格，Lighthouse 开，HTML 开，中文输出。`
+- 明确说用默认：`审核 https://example.com，全部用默认。`
 
-- **首句一次性把五个答案给齐**，例如
-  ```
-  审核 https://example.com —— 50 页，Operator 风格，本地 Lighthouse 开，HTML 报告开，中文输出。
-  ```
-- **明确说明用默认**，例如
-  ```
-  审核 https://example.com，全部用默认。
-  ```
+"直接做"、"快点"、"别问了" **不会**跳过问询，这是有意的。
 
-其他口吻（"直接做"、"快点"、"别问了"）依然会触发问题，这是有意为之。
+### 已知限制
 
-当前实现的几个限制，建议先了解：
-
-- 抓取页数范围：`1` 到 `50`
-- 预设模式：`fast=1`、`light=10`、`template=50`
-- 默认抓取范围：`light=10`
-- Lighthouse URL 数：默认 `1` 个首页 URL，最大 `10`
-- SPA 的最佳努力扩展仍然是采样逻辑，不是完整应用爬虫
-- SPA 路由 hints 和猜测路径会标记为辅助发现，不会当成搜索引擎可爬证明
-
-## 适用场景
-
-当你需要以下能力时，可以使用 `seo-geo-site-audit`：
-
-- SEO 审核
-- GEO / AI 可见性审核
-- 采样式站点质量检查，而不是全站爬取
-- 带评分、证据、问题和修复建议的结构化报告
-- HTML 报告导出
-
-## SPA 与搜索爬取能力
-
-爬虫会为每个 HTML 页面保留两条证据线：
-
-- `search_engine_visibility`：raw Googlebot 风格 HTTP 基线，不执行 JavaScript。
-- 浏览器渲染证据：SPA 在 JavaScript 运行后展示给用户的内容。
-
-这样做是为了避免把"浏览器能看到"误判成"搜索引擎一定能稳定看到"。如果内容、导航、结构化数据或路由只在渲染后出现，报告应该把它当作风险说明。只通过 `dom_route_hint` 或 `route_guess` 找到的页面属于审计辅助发现，不应写成搜索引擎可直接爬取。
-
-## 聊天中使用
-
-可以这样开始：
-
-```text
-Use $seo-geo-site-audit to audit https://example.com
-```
-
-在正式抓取前，技能会按顺序逐个确认：
-
-1. 抓取范围
-2. 输出风格
-3. 性能证据（运行本地 Lighthouse 或跳过）
-4. 是否生成 HTML 报告
-5. 最后再询问输出语言
-
-默认首次测试建议：
-
-- 保持本地 Lighthouse 打开
-- 输出风格先保持默认
-- 先用默认的 `10` 页 light audit
-- 如果你想拿到可分享的产物，可以打开 HTML 输出
-
-当前性能选项：
-
-- `1. 运行本地 Lighthouse（默认）`
-- `2. 跳过性能`
-
-性能采集默认只测 landing page / 首页。包装脚本会对 1 个首页 URL 分别跑 mobile 和 desktop，这样可以避免重型 SPA 路由导致 Lighthouse 等待时间过长。只有在明确需要额外模板覆盖时，再使用 `--max-pagespeed-urls` 提高 URL 数量。
-
-最后的语言选项是：
-
-- `1. English (default)`
-- `2. Chinese`
-- `3. Other (type it in)`
-
-语言说明：
-
-- 终端中的最终报告与最终 HTML 报告应该使用同一种语言
-- 英文和中文是内置的一等选项
-- 如果用户输入其他语言，agent 仍可先写结构化 `final-report.json`，再渲染出同语言 HTML
-
-如果 agent 没有主动逐项提问，可以更明确地这样说：
-
-```text
-Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions one by one with numbered options for scope, output style, performance handling, HTML report, and final output language before you begin.
-```
+- 抓取页数：1–50（`fast=1`、`light=10`、`template=50`；默认 `light`）。
+- Lighthouse：默认 1 个首页 URL（mobile + desktop），最多 10 个（`--max-pagespeed-urls`）。
+- SPA 路由扩展仍是采样逻辑，不是完整应用爬虫。
+- 只通过 `dom_route_hint` 或 `route_guess` 找到的路由会被标为**辅助发现**，不算搜索引擎可爬证据。
 
 ## 终端使用
 
-正常运行请使用包装脚本（把 `${SKILL_DIR}` 替换为你的实际安装路径，例如 `~/.claude/skills/seo-geo-site-audit`）：
+把 `${SKILL_DIR}` 替换为你的实际安装路径，例如 `~/.claude/skills/seo-geo-site-audit`。
 
 ```bash
-"${SKILL_DIR}/scripts/audit-site" \
-  https://example.com \
-  --output-style operator
+"${SKILL_DIR}/scripts/audit-site" https://example.com --output-style operator
 ```
 
 中文 HTML 报告示例：
@@ -477,7 +271,7 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
   --report-language chinese
 ```
 
-补全 `final-report.json` 后，再渲染最终交付版 HTML：
+Claude 补全 `final-report.json` 后，再渲染最终交付版 HTML：
 
 ```bash
 "${SKILL_DIR}/scripts/render-report-html" \
@@ -485,51 +279,44 @@ Use $seo-geo-site-audit to audit https://example.com. Ask me the setup questions
   --out "${SKILL_DIR}/runs/site-audit-example.com-<stamp>/audit-report.html"
 ```
 
-常用参数：
+常用参数（完整列表见 [`skills/seo-geo-site-audit/references/cli-flags.md`](skills/seo-geo-site-audit/references/cli-flags.md)）：`--mode`、`--max-pages`、`--output-style`、`--max-pagespeed-urls`、`--skip-pagespeed`、`--html-report`、`--report-language`、`--fetcher`、`--auto-install-prereqs`、`--skip-prereq-check`、`--out-dir`。
 
-- `--mode fast|light|template`，分别对应 `1`、`10`、`50` 页
-- `--max-pages 1-50`
-- `--output-style boss|operator|specialist`
-- `--max-pagespeed-urls 1-10`（默认 `1`；只测首页，并分别跑 mobile 和 desktop）
-- `--skip-pagespeed`
-- `--html-report`
-- `--report-language english|chinese`，用于包装脚本的证据页 HTML 和最终报告种子 JSON
-- `--fetcher auto|scrapling|lightpanda|agent_browser|chrome|urllib`
-- `--auto-install-prereqs`
-- `--skip-prereq-check`
-- `--out-dir /path/to/output`
+### 产物
 
-输出产物：
+- `crawl.json` — 抓取证据 + 单页信号
+- `pagespeed.json` — Lighthouse 数据（除非跳过）
+- `audit-run.json` — 本次运行 manifest
+- `evidence-report.html` — 原始证据 HTML（启用 `--html-report` 时）
+- `final-report.json` — Claude 补全的种子 payload
+- `audit-report.html` — 由 `final-report.json` 渲染的最终交付 HTML
 
-- `crawl.json`
-- `pagespeed.json`，如果没有跳过
-- `audit-run.json`
-- `evidence-report.html`，当启用 HTML 输出时生成
-- `final-report.json`，作为最终交付稿的种子结构
-- `audit-report.html`，在你用 `final-report.json` 渲染最终交付 HTML 后生成
+### 最终 HTML 流程
 
-技能里的最终 HTML 流程：
+1. 包装脚本收集抓取 + Lighthouse 证据。
+2. 写出 `evidence-report.html`，并生成 `final-report.json` 种子。
+3. Claude 用所选语言写出终端审核结论，并补全 `final-report.json`。
+4. 渲染器将其转为最终的 `audit-report.html`。
 
-1. 包装脚本先收集抓取与 Lighthouse 证据。
-2. 包装脚本写出 `evidence-report.html`，并生成 `final-report.json` 种子。
-3. agent 用所选语言写出最终审核结论，并补全 `final-report.json`。
-4. 渲染器再将其转换为最终的 `audit-report.html`。
+## 爬虫对 SPA 的处理
+
+每个 HTML 页面保留两条证据线：
+
+- **`search_engine_visibility`** — raw Googlebot 风格 HTTP 基线，不执行 JS。
+- **浏览器渲染证据** — SPA 在 JS 执行后展示给用户的内容。
+
+只在渲染后出现的内容、导航、结构化数据或路由会被标为 JavaScript 依赖风险，而不是"Google 看不到"。只通过 `dom_route_hint` 或 `route_guess` 找到的页面属于审计辅助发现，不会写成搜索引擎可直接爬取。
 
 ## 安全说明
 
-这个仓库设计为可安全公开克隆。
+仓库设计为可安全公开克隆。
 
-- 任何 API key、token、密钥都不应该被硬编码到源码、文档或产物中。
-- 本技能不依赖任何第三方 API key 来收集性能证据；Lighthouse 在本地运行。
+- 源码、文档、产物中都不应硬编码 API key / token / 密钥。
+- Lighthouse 在本地运行，不需要第三方 API key。
+- Chrome 沙箱默认开启；只在受信任的 root/CI/容器环境里通过 `SEO_GEO_ALLOW_NO_SANDBOX=1` 关闭。
+- 可选爬虫工具的自动安装是 opt-in（`--auto-install-prereqs`）。Lightpanda 二进制下载默认要求注册 SHA256，或显式设置 `SEO_GEO_ALLOW_UNVERIFIED_LIGHTPANDA=1`。
 
-更多说明见：
+完整安全说明见 [`skills/seo-geo-site-audit/SECURITY.md`](skills/seo-geo-site-audit/SECURITY.md)。
 
-- [skills/seo-geo-site-audit/SECURITY.md](skills/seo-geo-site-audit/SECURITY.md)
+## 贡献
 
-## 贡献策略
-
-欢迎 clone 和 fork。
-
-如果你觉得这个仓库对你有帮助，欢迎顺手点一个 star。
-
-如果你遇到 bug，或者有改进建议，欢迎提交 issue。
+欢迎 clone / fork。觉得有用的话顺手点个 star 就很感谢。遇到 bug 或有建议，欢迎提 issue。

@@ -3,6 +3,10 @@ outputs/
 skills/seo-geo-site-audit/runs/
 .serena/
 
+# Local autoresearch tooling output
+predict/
+fix/
+
 # Python
 __pycache__/
 *.pyc
