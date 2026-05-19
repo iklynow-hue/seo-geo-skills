@@ -64,9 +64,17 @@ const desktopUA =
 const mobileUA =
   'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
 
-const chrome = await chromeLauncher.launch({
-  chromeFlags: ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
-});
+// Chrome sandbox stays ON by default. The renderer audits arbitrary user-supplied URLs,
+// so a renderer RCE in a malicious page would otherwise chain straight into host execution.
+// Set SEO_GEO_ALLOW_NO_SANDBOX=1 only for trusted CI / container / root environments
+// where the OS-level sandbox is unavailable.
+const allowNoSandbox = process.env.SEO_GEO_ALLOW_NO_SANDBOX === '1';
+const chromeFlags = ['--headless=new', '--disable-gpu', '--disable-dev-shm-usage'];
+if (allowNoSandbox) {
+  chromeFlags.push('--no-sandbox');
+  console.error('[run_lighthouse] SEO_GEO_ALLOW_NO_SANDBOX=1 — Chrome sandbox disabled.');
+}
+const chrome = await chromeLauncher.launch({ chromeFlags });
 
 try {
   const flags = {
