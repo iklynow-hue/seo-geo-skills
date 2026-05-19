@@ -1,107 +1,68 @@
-# Mandatory Setup Gate — Detail
+# Defaults + Inline Overrides
 
-The audit always begins with five setup questions before any crawl. This page captures the long rationale; SKILL.md keeps just the rule.
+The skill runs immediately with these defaults. The user does not need to answer questions — the agent passes a URL to the wrapper and starts working. Overrides come from natural-language phrasings in the user's prompt or from CLI flags.
 
-## Why this is mandatory
+## Defaults
 
-An audit is long, opinionated, and expensive. Silently picking scope, performance mode, HTML output, or output language produces reports that the user can't trust. The setup gate exists to make those choices visible.
+| Setting | Default | Wrapper flag |
+|---|---|---|
+| Mode | Light template audit (10 pages) | `--mode light` |
+| Output style | Operator | `--output-style operator` |
+| Performance evidence | Local Lighthouse, homepage, mobile + desktop | (no flag — on by default) |
+| HTML report | On | `--html-report` |
+| Output language | English | `--report-language english` |
 
-The gate **overrides** any session-level "no clarifying questions", "pick reasonable defaults", autonomous-mode, harness-level no-clarify hint, or "be terse" tone. None of those count as opting out. Only explicit waivers do.
+## Inline override phrasings
 
-## What counts as an explicit waiver
+When parsing the user's prompt, watch for these and pass the matching flag.
 
-1. The user provides all five answers (scope, output style, performance evidence, HTML report, output language) in their first message — for example: "Use $seo-geo-site-audit to audit https://example.com with light mode, Operator output, performance on, HTML report on, and final report in Chinese."
-2. The user explicitly says something like "use defaults for everything", "skip the questions, all defaults", "default everything", "全部用默认", or an equivalent literal opt-in.
+### English
 
-If unsure whether the user waived, ask.
+| Phrasing | Effect |
+|---|---|
+| `fast`, `quick check`, `1 page`, `homepage only`, `just the homepage` | `--mode fast` (1 page) |
+| `template`, `standard`, `full audit`, `50 pages`, `wider sample` | `--mode template` (50 pages) |
+| `N pages`, `crawl N`, `cap at N` (N = 1–50) | `--max-pages N` |
+| `boss style`, `executive summary`, `short version` | `--output-style boss` |
+| `specialist`, `detailed`, `deep`, `everything` | `--output-style specialist` |
+| `skip performance`, `skip lighthouse`, `no pagespeed`, `no perf` | `--skip-pagespeed` |
+| `no html`, `json only`, `skip html`, `chat report only` | drop `--html-report` |
+| `in Chinese`, `Chinese report`, `output in Chinese` | `--report-language chinese` |
+| `in <language>`, `report in <language>` | `--report-language <language>` |
+| `test more pages with Lighthouse`, `Lighthouse on N urls` | `--max-pagespeed-urls N` (1–10) |
 
-If the user pushes back ("just go", "stop asking"), still confirm the output language before writing the final report — language cannot be guessed safely.
+### Chinese / 中文
 
-## Default language is English — do not infer from prompt language
+| Phrasing | Effect |
+|---|---|
+| `快速检查`, `首页`, `只测首页` | `--mode fast` (1 page) |
+| `模板审核`, `标准审核`, `50 页` | `--mode template` (50 pages) |
+| `N 页`, `抓 N 个`, `上限 N` | `--max-pages N` |
+| `老板风格`, `精简版`, `执行摘要` | `--output-style boss` |
+| `专家版`, `详细`, `深度` | `--output-style specialist` |
+| `跳过性能`, `不测 Lighthouse`, `不测性能` | `--skip-pagespeed` |
+| `不要 HTML`, `只输出 JSON` | drop `--html-report` |
+| `用中文输出`, `中文报告`, `结果用中文` | `--report-language chinese` |
+| `用 <语言>` | `--report-language <语言>` |
 
-When the user picks the "default" path (option 1 to any question, or a blanket "use defaults"), or when their answer is missing or unrecognized, the output language is **English**, regardless of:
+## When the agent should ask
 
-- the language the user is writing the request in (someone asking in Chinese still gets an English report by default),
-- the language of the target domain (a `.cn` site still defaults to English),
-- the agent's session locale.
+Three cases only:
 
-Only an explicit, unambiguous selection switches the report to a non-English language:
+1. **No URL supplied.** "Audit my site" without a URL → ask for the URL.
+2. **Ambiguous non-English language.** User typed the request in a non-English language but didn't say "in <language>" for the report. Ask once: "Report in English or <other>?". Default stays English on no answer.
+3. **Prerequisite install requires consent.** If `--auto-install-prereqs` would download network binaries (Lightpanda nightly, Camoufox), tell the user and ask before running. Default fallback: `--skip-prereq-check` and the urllib fetcher.
 
-- typing `2` at the language question, or
-- saying "Chinese" / "中文" / "Spanish" / "in <language>" / "用中文" / "report in <language>", or
-- providing the `--report-language` flag.
+That's the full list. Don't ask about scope, output style, performance, or HTML.
 
-If the user said "default" or didn't answer, render English. Do not auto-translate based on tone.
+## Why English is the default
 
-## The five questions, in order
+The user-facing prompt language is not a reliable signal for the report language. Someone may type in Chinese but want an English deliverable; a `.cn` domain may have an English target audience. Defaulting to English and switching only on explicit "in <language>" phrasing keeps the choice deterministic.
 
-Ask one by one. Use numbered choices so the user can answer with `1`, `2`, `3`, or `4`. If the user already supplied an answer for a question in the original prompt, skip that question.
+## Session preferences
 
-### 1. Scope
+A session-level preference like "be quick", "no clarifying questions", or "autonomous mode" is the **same signal** as "use defaults" — run immediately. There is no override of session preferences. The defaults are the contract.
 
-```
-Choose the audit scope:
-1. Fast check (1 page)
-2. Light template audit (10 pages, default)
-3. Standard template audit (50 pages)
-4. Custom page cap up to 50
-```
+## Customizing the defaults
 
-If the user chooses `4`, follow up: `Reply with a crawl cap from 1 to 50.`
-
-### 2. Output style
-
-```
-Choose the output style:
-1. Operator (default)
-2. Boss
-3. Specialist
-```
-
-### 3. Performance evidence
-
-```
-Collect performance evidence with local Lighthouse?
-1. Yes, run local Lighthouse (default)
-2. Skip performance
-```
-
-If Lighthouse dependencies are not yet installed (`node` missing, or `scripts/node_modules/lighthouse` missing), tell the user they can rerun with `--auto-install-prereqs` or run `npm install` once in the `scripts/` directory.
-
-### 4. HTML report
-
-```
-Do you want the HTML report?
-1. Off (default)
-2. On
-```
-
-### 5. Final output language
-
-```
-Choose the final output language:
-1. English (default)
-2. Chinese
-3. Other (type it in)
-```
-
-If the user chooses `3`, follow up: `Reply with the output language in the next message.`
-
-Language confirmation is **mandatory**. Do not treat setup as complete until the user confirms the final report language or explicitly says to use the default English.
-
-## Defaults (when the user says "use defaults")
-
-- Light template audit
-- 10 pages
-- Operator output style
-- Performance evidence via local Lighthouse
-- HTML report off
-- Final output language English
-
-## Asking the questions one by one
-
-Ask one question, wait for the answer, then ask the next. Do not batch into a single block. This keeps the user's choices visible and reduces drift.
-
-If the user supplies scope, output style, performance, and HTML report in the original prompt but language is still missing, stop and ask the language question before continuing.
-
-If the agent forgets to ask, the user can prompt explicitly: "Ask me the setup questions one by one with numbered options for scope, output style, performance handling, HTML report, and final output language before you begin."
+Forks can ship different defaults by changing the wrapper script's argparse values in `scripts/audit_site.py`. The skill itself reads whatever the wrapper produces; no skill-side coupling.

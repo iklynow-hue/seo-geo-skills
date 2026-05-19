@@ -62,22 +62,33 @@ In chat:
 - `Audit this site for AI visibility: https://example.com`
 - `Run a 50-page audit for https://example.com, generate the HTML report, output in Chinese`
 
-The skill asks five setup questions before crawling:
+The skill runs immediately on the URL. No setup questions. Defaults:
 
-1. **Scope** — Fast (1) / Light (10) / Standard (50) / Custom (1–50)
-2. **Output style** — Operator (default) / Boss / Specialist
-3. **Performance** — Local Lighthouse (default) / Skip
-4. **HTML report** — Off (default) / On
-5. **Output language** — English (default) / Chinese / Other
+| Setting | Default |
+|---|---|
+| Mode | Light template audit (10 pages) |
+| Output style | Operator |
+| Performance | Local Lighthouse — homepage, mobile + desktop |
+| HTML report | On |
+| Output language | English |
 
-### The five questions are mandatory
+### Override inline
 
-The skill asks them even in sessions where you've told Claude to skip clarifying questions. Audits are long and opinionated; the skill refuses to silently pick scope, performance, HTML, or language for you. Two waivers exist:
+Just say what you want in the prompt:
 
-- Answer all five upfront — `Audit https://example.com — 50 pages, Operator, Lighthouse on, HTML on, output in Chinese.`
-- Explicit defaults opt-in — `Audit https://example.com, use defaults for everything.`
+- `Run a 50-page audit for https://example.com in Chinese` → template mode + Chinese report
+- `Quick check on https://example.com, skip Lighthouse` → fast mode (1 page) + perf off
+- `Audit https://example.com with specialist depth` → specialist style
 
-"Just go" / "be quick" / "stop asking" do **not** waive the questions.
+Or override via CLI flags when running the wrapper directly (see Terminal usage below).
+
+### The agent only asks when
+
+- The URL is missing (`Audit my site`).
+- The user wrote the request in a non-English language without specifying the report language (single confirmation: "Report in English or <other>?").
+- An auto-install of optional fetchers would download network binaries — consent is required.
+
+The report language defaults to **English** even when the prompt is in another language. Switch only on explicit "in `<language>`" phrasing or the `--report-language` flag.
 
 ### Limits to know
 
@@ -228,22 +239,33 @@ cd skills/seo-geo-site-audit/scripts && npm install
 - `帮我审核这个站点的 AI 可见性: https://example.com`
 - `跑一次 50 页的审核 https://example.com，输出 HTML 报告，结果用中文`
 
-抓取前 skill 会按顺序问五个问题：
+收到 URL 后 skill 直接开跑，不再追问 5 个问题。默认值：
 
-1. **抓取范围** — Fast (1) / Light (10，默认) / Standard (50) / 自定义
-2. **输出风格** — Operator（默认）/ Boss / Specialist
-3. **性能证据** — 本地 Lighthouse（默认）/ 跳过
-4. **HTML 报告** — 关（默认）/ 开
-5. **输出语言** — English（默认）/ Chinese / Other
+| 项 | 默认 |
+|---|---|
+| 模式 | 轻量模板审核（10 页） |
+| 输出风格 | Operator |
+| 性能 | 本地 Lighthouse — 首页，移动 + 桌面 |
+| HTML 报告 | 开 |
+| 输出语言 | English |
 
-### 这五个问题是强制的
+### 在原句里就能改
 
-即使你告诉 Claude 在当前会话里不要追问，skill 仍会问这五项。审核又长又主观，skill 不允许它默默替你定范围、性能、HTML、语言。只有两种放弃问询的方式：
+直接在请求里说想要什么：
 
-- 首句一次性给齐五个答案：`审核 https://example.com —— 50 页，Operator 风格，Lighthouse 开，HTML 开，中文输出。`
-- 明确说用默认：`审核 https://example.com，全部用默认。`
+- `审核 https://example.com，跑 50 页，用中文输出` → template + 中文报告
+- `快速检查 https://example.com，跳过 Lighthouse` → fast + 跳过性能
+- `深度审核 https://example.com，专家风格` → specialist 风格
 
-"直接做"、"快点"、"别问了" **不会**跳过问询，这是有意的。
+也可以在终端直接给 CLI flags（见下方"终端使用"）。
+
+### 只在以下三种情况才会问
+
+- 没给 URL（`帮我审核我的站点`）。
+- 请求用非英文写但没说"用 X 语言输出"——只确认一次："输出用 English 还是 <其他>？"
+- 自动安装可选爬虫工具时（要联网下载 Lightpanda 等），先确认。
+
+报告默认 **English**，即使你的请求是中文写的也一样。只有显式说"用中文"或加 `--report-language` flag 才切换。
 
 ### 已知限制
 
