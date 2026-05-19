@@ -503,8 +503,21 @@ def compact_html_for_analysis(html_text: str) -> str:
 # Fetcher implementations
 # ---------------------------------------------------------------------------
 
+def _require_http_scheme(url: str) -> None:
+    """Refuse non-HTTP(S) schemes before they reach urlopen.
+
+    urllib happily reads file://, ftp://, etc., which would let a malicious
+    sitemap URL or a typo in a user-supplied URL ingest local files. Crawl
+    targets must be HTTP(S).
+    """
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(f"Refusing non-HTTP(S) scheme: {scheme or '<empty>'} for {url!r}")
+
+
 def _fetch_urllib(url: str, user_agent: str = DEFAULT_UA, timeout: int = FETCH_TIMEOUT) -> dict:
     """Raw HTTP GET via urllib — no JS rendering."""
+    _require_http_scheme(url)
     request = urllib.request.Request(
         url,
         headers={

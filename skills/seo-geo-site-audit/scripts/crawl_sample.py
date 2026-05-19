@@ -671,7 +671,14 @@ def fetch(url: str, user_agent: str, timeout: int = TIMEOUT, preferred_fetcher: 
 
 
 def _fetch_urllib_raw(url: str, user_agent: str, timeout: int = TIMEOUT) -> dict:
-    """Raw urllib fetch for non-HTML resources (robots.txt, sitemaps)."""
+    """Raw urllib fetch for non-HTML resources (robots.txt, sitemaps).
+
+    Rejects non-HTTP(S) schemes so a malicious sitemap entry cannot trick the
+    crawler into reading file://, ftp://, or similar.
+    """
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(f"Refusing non-HTTP(S) scheme: {scheme or '<empty>'} for {url!r}")
     request = urllib.request.Request(
         url,
         headers={
