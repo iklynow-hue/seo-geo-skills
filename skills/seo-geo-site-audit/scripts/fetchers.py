@@ -712,10 +712,14 @@ def _fetch_agent_browser(url: str, timeout: int = FETCH_TIMEOUT, auto_connect: b
 # ---------------------------------------------------------------------------
 
 def _count_words_quick(text: str) -> int:
-    """Fast word count on raw HTML text (approximate, before full parsing)."""
+    """Fast word count on raw HTML text (approximate, before full parsing).
+
+    Strips <script> and <style> blocks first so inline JSON-LD or CSS does
+    not inflate the count past the SPA-recovery threshold.
+    """
     import re as _re
-    # Strip tags roughly
-    stripped = _re.sub(r"<[^>]+>", " ", text)
+    no_blocks = _re.sub(r"<(script|style)\b[^>]*>.*?</\1>", " ", text, flags=_re.DOTALL | _re.IGNORECASE)
+    stripped = _re.sub(r"<[^>]+>", " ", no_blocks)
     return len(_re.findall(r"\b[\w-]+\b", stripped))
 
 
