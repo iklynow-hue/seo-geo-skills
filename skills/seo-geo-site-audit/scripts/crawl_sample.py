@@ -30,6 +30,7 @@ DEFAULT_UA = DEFAULT_SEARCH_UA
 TIMEOUT = 30
 MAX_SITEMAPS = 20
 MAX_BODY_CHARS = 250000
+MAX_SITEMAP_CHARS = 10_000_000
 BINARY_EXTENSIONS = {
     ".pdf",
     ".jpg",
@@ -676,7 +677,8 @@ def _fetch_urllib_raw(url: str, user_agent: str, timeout: int = TIMEOUT) -> dict
     Rejects non-HTTP(S) schemes so a malicious sitemap entry cannot trick the
     crawler into reading file://, ftp://, or similar.
     """
-    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    parsed = urllib.parse.urlsplit(url)
+    scheme = parsed.scheme.lower()
     if scheme not in ("http", "https"):
         raise ValueError(f"Refusing non-HTTP(S) scheme: {scheme or '<empty>'} for {url!r}")
     request = urllib.request.Request(
@@ -694,7 +696,9 @@ def _fetch_urllib_raw(url: str, user_agent: str, timeout: int = TIMEOUT) -> dict
             raw = gzip.decompress(raw)
         content_type = response.headers.get_content_type()
         charset = response.headers.get_content_charset() or "utf-8"
-        text = raw[:MAX_BODY_CHARS].decode(charset, errors="replace")
+        path_lower = parsed.path.lower()
+        text_limit = MAX_SITEMAP_CHARS if path_lower.endswith(".xml") else MAX_BODY_CHARS
+        text = raw[:text_limit].decode(charset, errors="replace")
         return {
             "final_url": response.geturl(),
             "status": getattr(response, "status", None) or response.getcode(),
@@ -702,6 +706,7 @@ def _fetch_urllib_raw(url: str, user_agent: str, timeout: int = TIMEOUT) -> dict
             "content_type": content_type,
             "text": text,
             "bytes": len(raw),
+            "truncated": len(raw) > text_limit,
             "fetcher": "urllib",
         }
 
@@ -855,6 +860,7 @@ def discover_sitemap_urls(start_url: str, user_agent: str) -> dict:
         "ai_crawler_directives": {},
     }
     discovered_urls: list[str] = []
+    sitemap_errors: list[dict[str, str]] = []
     try:
         robots_resp = fetch(robots_url, user_agent)
         robots_info["present"] = robots_resp["status"] == 200
@@ -883,10 +889,16 @@ def discover_sitemap_urls(start_url: str, user_agent: str) -> dict:
             resp = fetch(sitemap_url, user_agent)
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
             print(f"[sitemap] fetch failed for {sitemap_url}: {type(exc).__name__}: {exc}", file=sys.stderr)
+            sitemap_errors.append({"url": sitemap_url, "error": f"{type(exc).__name__}: {exc}"})
             continue
         if resp["status"] != 200:
+            sitemap_errors.append({"url": sitemap_url, "error": f"HTTP {resp['status']}"})
             continue
+        if resp.get("truncated"):
+            sitemap_errors.append({"url": sitemap_url, "error": f"sitemap response truncated at {len(resp['text'])} chars"})
         urls, nested = extract_urls_from_sitemap(resp["text"])
+        if not urls and not nested:
+            sitemap_errors.append({"url": sitemap_url, "error": "no URLs parsed from sitemap XML"})
         for nested_url in nested:
             if nested_url not in seen:
                 to_visit.append(nested_url)
@@ -897,6 +909,7 @@ def discover_sitemap_urls(start_url: str, user_agent: str) -> dict:
         "robots": robots_info,
         "urls": list(dict.fromkeys(discovered_urls)),
         "sitemap_count_processed": sitemap_count,
+        "sitemap_errors": sitemap_errors,
     }
 
 
@@ -1374,6 +1387,7 @@ def build_site_signals(start_url: str, user_agent: str, robots_bundle: dict) -> 
         "sitemap": {
             "urls_discovered": len(robots_bundle["urls"]),
             "sitemap_count_processed": robots_bundle["sitemap_count_processed"],
+            "errors": robots_bundle.get("sitemap_errors", []),
         },
         "llms_txt": llms,
         "security_headers": security_headers,
